@@ -20,7 +20,12 @@ if [ ! -d /opt/ogame-bot/.git ]; then
 fi
 cd /opt/ogame-bot
 
-read -rp "Dominio (ej. bot.tudominio.com, vacío para usar solo IP:puerto): " DOMAIN
+read -rp "Dominio (ej. bot.tudominio.com o mibot.duckdns.org, vacío para usar solo IP:puerto): " DOMAIN
+DOMAIN=$(echo "${DOMAIN}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' | sed -E 's#^https?://##; s#/.*$##')
+if echo "${DOMAIN}" | grep -q 'duckdns.org'; then
+  echo ">> Recuerda: en duckdns.org el subdominio se crea solo con el prefijo (minúsculas, números y guiones, sin puntos ni espacios)"
+  echo ">> y la IP en 'current ip' debe ser la de este VPS. El token de DuckDNS no hace falta aquí."
+fi
 read -rsp "Contraseña del panel (Enter para generar una aleatoria): " WEB_PASSWORD || true
 echo
 if [ -z "${WEB_PASSWORD}" ]; then
@@ -53,7 +58,8 @@ else
   SERVER_IP=$(curl -s ifconfig.me || echo TU_IP)
   echo
   echo "✅ Listo: https://${DOMAIN}"
-  echo "   (el registro A de ${DOMAIN} debe apuntar a ${SERVER_IP}; el certificado tarda 1-2 minutos)"
+  echo "   (${DOMAIN} debe apuntar a ${SERVER_IP}; el certificado tarda 1-2 minutos)"
+  echo "   Si Caddy no consigue el certificado, mira: docker compose logs caddy"
 fi
 echo
 echo "Contraseña del panel guardada en /opt/ogame-bot/.env (cat .env para verla)"

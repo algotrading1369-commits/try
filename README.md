@@ -61,6 +61,15 @@ El script instala Docker si falta, clona el repo, te pregunta el dominio (opcion
 2. En el panel de tu dominio, crear un registro **A** apuntando a la IP del VPS
 3. Abrir los puertos **80 y 443** en el firewall del VPS
 
+#### DuckDNS (dominio gratis, paso a paso)
+
+1. Entra en [duckdns.org](https://www.duckdns.org) y regístrate (puedes usar tu cuenta de GitHub).
+2. En el campo "add domain" escribe **solo el prefijo**: minúsculas, números y guiones, sin puntos ni espacios (ej. `ogamebot`). Si da error, es que el nombre ya está cogido o tiene caracteres no válidos → prueba otro. Obtendrás `ogamebot.duckdns.org`.
+3. En la lista de dominios, pon en **current ip** la IP de tu VPS (la misma que usas para SSH) y guarda.
+4. En `install.sh`, cuando pregunte el dominio, escribe el completo: `ogamebot.duckdns.org`.
+
+**¿Y el token de DuckDNS?** Es una cadena larga que identifica tu cuenta (como una contraseña) y sirve para que scripts externos actualicen tu IP automáticamente vía su API. **No lo necesitas para este bot**: en un VPS la IP es fija, basta con ponerla en "current ip". No lo compartas con nadie.
+
 Si lo prefieres a mano:
 
 ```bash
