@@ -48,14 +48,14 @@ services:
 EOF
   echo ">> Sin dominio: el panel se servirá por http en el puerto 8300"
   docker compose up -d --build
-  SERVER_IP=$(curl -s ifconfig.me || echo TU_IP)
+  SERVER_IP=$(curl -4 -s ifconfig.me || curl -6 -s ifconfig.me || echo TU_IP)
   echo
   echo "✅ Listo: http://${SERVER_IP}:8300"
 else
   rm -f docker-compose.override.yml
   echo ">> Arrancando con HTTPS (Caddy pedirá el certificado automáticamente)..."
   docker compose --profile https up -d --build
-  SERVER_IP=$(curl -s ifconfig.me || echo TU_IP)
+  SERVER_IP=$(curl -4 -s ifconfig.me || curl -6 -s ifconfig.me || echo TU_IP)
   echo
   echo "✅ Listo: https://${DOMAIN}"
   echo "   (${DOMAIN} debe apuntar a ${SERVER_IP}; el certificado tarda 1-2 minutos)"
