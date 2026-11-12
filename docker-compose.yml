@@ -2,11 +2,32 @@ services:
   ogame-bot:
     build: .
     container_name: ogame-bot
-    ports:
-      - "8300:8300"
+    restart: unless-stopped
     environment:
-      WEB_PASSWORD: ${WEB_PASSWORD:-cambia-esto}
+      WEB_PASSWORD: ${WEB_PASSWORD}
       DATA_DIR: /data
     volumes:
       - ./data:/data
+    expose:
+      - "8300"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ogame-caddy
     restart: unless-stopped
+    profiles: ["https"]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - ogame-bot
+
+volumes:
+  caddy_data:
+  caddy_config:

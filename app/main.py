@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import queue
+import threading
+import time
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -15,6 +17,48 @@ from .notify import TelegramNotifier
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 PANEL_PASSWORD = os.environ.get("WEB_PASSWORD", "")
 
+_auth_lock = threading.Lock()
+_auth_fails = {}
+MAX_AUTH_FAILS = 5
+AUTH_BLOCK_SECONDS = 900
+
+
+def _client_ip(request: Request):
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _auth_blocked(ip):
+    with _auth_lock:
+        fails = _auth_fails.get(ip)
+        if not fails:
+            return False
+        count, last = fails
+        if time.time() - last > AUTH_BLOCK_SECONDS:
+            del _auth_fails[ip]
+            return False
+        return count >= MAX_AUTH_FAILS
+
+
+def _register_auth_fail(ip):
+    with _auth_lock:
+        count, last = _auth_fails.get(ip, (0, 0))
+        if time.time() - last > AUTH_BLOCK_SECONDS:
+            count = 0
+        _auth_fails[ip] = (count + 1, time.time())
+
+
+def _auth_ok(request: Request):
+    sent = request.headers.get("X-Panel-Password") or request.query_params.get("key")
+    if sent == PANEL_PASSWORD:
+        with _auth_lock:
+            _auth_fails.pop(_client_ip(request), None)
+        return True
+    _register_auth_fail(_client_ip(request))
+    return False
+
 app = FastAPI(title="OGame Bot Web")
 db = Database()
 bus = EventBus()
@@ -26,9 +70,10 @@ notifier = TelegramNotifier(db)
 async def auth_middleware(request: Request, call_next):
     if PANEL_PASSWORD:
         path = request.url.path
+        if (path.startswith("/api") or path == "/") and _auth_blocked(_client_ip(request)):
+            return JSONResponse(status_code=429, content={"detail": "Demasiados intentos fallidos. Espera 15 minutos."})
         needs_auth = path.startswith("/api") or path == "/"
-        sent = request.headers.get("X-Panel-Password") or request.query_params.get("key")
-        if needs_auth and sent != PANEL_PASSWORD:
+        if needs_auth and not _auth_ok(request):
             if path.startswith("/api"):
                 return JSONResponse(status_code=401, content={"detail": "Contraseña incorrecta"})
     return await call_next(request)

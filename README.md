@@ -38,15 +38,39 @@ Abre `http://127.0.0.1:8300` (variables `HOST` y `PORT` configurables).
 
 ## Despliegue online (24/7)
 
-### Docker (VPS o NAS)
+### Docker (VPS o NAS) — instalación con un comando
+
+Estos comandos se ejecutan **en el servidor**, no en tu PC. Conéctate primero con SSH (la terminal de tu PC se convierte en una terminal *del servidor*):
 
 ```bash
-git clone https://github.com/algotrading1369-commits/try.git ogame-bot
-cd ogame-bot
-WEB_PASSWORD=tu-clave-secreta docker compose up -d --build
+ssh root@IP-DEL-SERVIDOR
 ```
 
-El panel queda en `http://IP-DEL-SERVIDOR:8300` protegido con tu contraseña. La base de datos persiste en `./data`.
+Y dentro del servidor:
+
+```bash
+wget -qO install.sh https://raw.githubusercontent.com/algotrading1369-commits/try/main/install.sh
+sudo bash install.sh
+```
+
+El script instala Docker si falta, clona el repo, te pregunta el dominio (opcional) y genera una contraseña aleatoria si no escribes una. Al terminar te muestra la URL de acceso.
+
+**Con dominio propio (HTTPS gratis):** el script usa Caddy, que solicita y renueva el certificado de Let's Encrypt automáticamente. Solo necesitas:
+
+1. Un dominio (Namecheap, Porkbun, o gratis en DuckDNS)
+2. En el panel de tu dominio, crear un registro **A** apuntando a la IP del VPS
+3. Abrir los puertos **80 y 443** en el firewall del VPS
+
+Si lo prefieres a mano:
+
+```bash
+git clone https://github.com/algotrading1369-commits/try.git ogame-bot && cd ogame-bot
+WEB_PASSWORD=tu-clave DOMAIN=bot.tudominio.com sudo docker compose --profile https up -d --build
+```
+
+Sin dominio, `install.sh` sirve el panel por HTTP en el puerto 8300.
+
+La base de datos persiste en `./data` del servidor.
 
 ### Railway / Render / Fly.io
 
@@ -59,9 +83,10 @@ El panel queda en `http://IP-DEL-SERVIDOR:8300` protegido con tu contraseña. La
 
 ### Consejos de seguridad al exponerlo online
 
-- Pon siempre `WEB_PASSWORD`.
-- Detrás de un proxy HTTPS (Caddy/Nginx) o usa el dominio HTTPS que te dan Railway/Render/Fly.
-- La contraseña se guarda en SQLite junto a las credenciales del juego: protege el servidor.
+- Pon siempre `WEB_PASSWORD`. Una buena: 20+ caracteres aleatorios (`openssl rand -hex 16`).
+- La API **bloquea 15 minutos** a las IPs que fallen 5 veces seguidas (anti fuerza bruta).
+- Con dominio, todo va por **HTTPS** (Caddy + Let's Encrypt, gratis y automático) con cabeceras HSTS.
+- La contraseña y las credenciales del juego se guardan en SQLite en el servidor: protege el acceso al VPS (usa claves SSH, no contraseñas).
 
 ## Telegram
 
@@ -74,8 +99,11 @@ Recibirás avisos de: ataques detectados, fleet-save ejecutado, errores del bot 
 ## Estructura
 
 ```
+install.sh              Instalación automática en el VPS (Docker + HTTPS)
+Caddyfile               Proxy con HTTPS automático (Let's Encrypt)
+docker-compose.yml      Bot + Caddy (perfil https)
 app/
-├── main.py              API FastAPI (REST + SSE, auth opcional) y panel estático
+├── main.py              API FastAPI (REST + SSE, auth con rate-limit) y panel estático
 ├── db.py                SQLite (cuenta, config, logs, objetivos, snapshots)
 ├── events.py            Bus de eventos para SSE
 ├── notify.py            Notificaciones Telegram
