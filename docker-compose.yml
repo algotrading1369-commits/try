@@ -1,0 +1,12 @@
+services:
+  ogame-bot:
+    build: .
+    container_name: ogame-bot
+    ports:
+      - "8300:8300"
+    environment:
+      WEB_PASSWORD: ${WEB_PASSWORD:-cambia-esto}
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

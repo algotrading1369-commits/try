@@ -83,7 +83,7 @@ class MockClient:
             for planet in self.planets
         }
         self.ship_store = {
-            self.planets[0]["id"]: {202: 120, 203: 60, 204: 800, 206: 90, 207: 40, 210: 200, 209: 20},
+            self.planets[0]["id"]: {202: 120, 203: 60, 204: 800, 206: 90, 207: 40, 208: 1, 210: 200, 209: 20},
             self.planets[1]["id"]: {202: 70, 204: 300, 210: 90, 206: 25},
             self.planets[2]["id"]: {202: 40, 204: 150, 210: 60},
         }

@@ -4,20 +4,25 @@ import time
 import traceback
 
 from ..events import EventBus
+from ..notify import TelegramNotifier
 from .base import Module
 from .modules.buildings import BuildingsModule
 from .modules.research import ResearchModule
 from .modules.shipyard import ShipyardModule
 from .modules.farmer import FarmerModule
 from .modules.fleet import ExpeditionModule, FleetSaveModule, TransportModule
+from .modules.sleep import SleepModule
+from .modules.colonize import ColonizeModule
 
 MODULE_CLASSES = [
     FleetSaveModule,
+    SleepModule,
     BuildingsModule,
     ResearchModule,
     ShipyardModule,
     FarmerModule,
     ExpeditionModule,
+    ColonizeModule,
     TransportModule,
 ]
 
@@ -77,6 +82,18 @@ DEFAULT_CONFIG = {
         "threshold": 1000000,
         "keep": 100000,
     },
+    "colonize": {
+        "enabled": False,
+        "interval": 900,
+        "origin_id": 0,
+        "coords": [],
+    },
+    "sleep": {
+        "enabled": False,
+        "interval": 60,
+        "start_hour": 1,
+        "end_hour": 8,
+    },
 }
 
 
@@ -101,6 +118,7 @@ class BotEngine:
     def __init__(self, db, bus=None):
         self.db = db
         self.bus = bus or EventBus()
+        self.notifier = TelegramNotifier(db)
         self.state_lock = threading.Lock()
         self.state = {
             "running": False,
@@ -143,6 +161,9 @@ class BotEngine:
     def _log(self, level, module, message):
         self.db.add_log(level, module, message)
         self.bus.publish("log", level=level, module=module, message=message)
+        if level in ("attack", "alert", "error"):
+            icon = {"attack": "\u2694\ufe0f", "alert": "\ud83d\udea8", "error": "\u274c"}.get(level, "\u2139\ufe0f")
+            self.notifier.send(f"{icon} <b>OGame Bot</b> [{module}]\n{message}")
 
     def start(self):
         with self.state_lock:
@@ -243,8 +264,33 @@ class BotEngine:
             if module.enabled() and self.next_runs.get(name, 0) <= now
         ]
         due.sort()
+        sleeping = False
+        sleep_module = self.modules.get("sleep")
+        if sleep_module and sleep_module.enabled() and sleep_module.in_sleep_window():
+            sleeping = True
+        with self.state_lock:
+            self.state["sleeping"] = sleeping
         for _, _, name, module in due[:1]:
+            if sleeping and name != "fleetsave":
+                continue
             self._run_module(module)
+        self._maybe_snapshot(now)
+
+    def _maybe_snapshot(self, now):
+        last = getattr(self, "_last_snapshot", 0)
+        if now - last < 600:
+            return
+        self._last_snapshot = now
+        try:
+            for planet in self.ctx.client.empire():
+                res = self.ctx.client.resources(planet["id"])
+                self.db.add_snapshot(
+                    planet["id"], planet["name"],
+                    res["metal"], res["crystal"], res["deuterium"],
+                )
+            self.db.prune_snapshots()
+        except Exception as exc:
+            self._log("warning", "engine", f"Snapshot fall\u00f3: {exc}")
 
     def _run_module(self, module):
         started = time.time()

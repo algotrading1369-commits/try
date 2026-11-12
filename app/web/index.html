@@ -4,9 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OGame Bot — Panel de control</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+
+<div id="auth-overlay" class="auth-overlay hidden">
+  <div class="auth-card">
+    <h2>🔒 Panel protegido</h2>
+    <p class="muted">Introduce la contraseña del panel (variable WEB_PASSWORD)</p>
+    <input type="password" id="auth-password" placeholder="Contraseña">
+    <button class="btn primary" id="auth-submit">Entrar</button>
+    <p id="auth-error" class="auth-error hidden">Contraseña incorrecta</p>
+  </div>
+</div>
+
 <header>
   <div class="brand">
     <span class="logo">🛰️</span>
@@ -16,25 +28,33 @@
     </div>
   </div>
   <div class="header-actions">
+    <span id="sleep-pill" class="pill hidden">🌙 Modo noche</span>
     <span id="status-pill" class="pill stopped">Detenido</span>
-    <button id="btn-start" class="btn primary">Iniciar</button>
-    <button id="btn-pause" class="btn">Pausar</button>
-    <button id="btn-stop" class="btn danger">Detener</button>
+    <button id="btn-start" class="btn primary">▶ Iniciar</button>
+    <button id="btn-pause" class="btn">⏸ Pausar</button>
+    <button id="btn-stop" class="btn danger">⏹ Detener</button>
   </div>
 </header>
 
-<nav>
-  <button class="tab active" data-tab="dashboard">Panel</button>
-  <button class="tab" data-tab="planets">Imperio</button>
-  <button class="tab" data-tab="fleet">Flotas</button>
-  <button class="tab" data-tab="farmer">Objetivos</button>
-  <button class="tab" data-tab="config">Configuración</button>
-  <button class="tab" data-tab="account">Cuenta</button>
-  <button class="tab" data-tab="logs">Registros</button>
+<nav id="main-nav">
+  <button class="tab active" data-tab="dashboard">📊 Panel</button>
+  <button class="tab" data-tab="planets">🪐 Imperio</button>
+  <button class="tab" data-tab="fleet">🚀 Flotas</button>
+  <button class="tab" data-tab="farmer">🎯 Objetivos</button>
+  <button class="tab" data-tab="config">⚙️ Configuración</button>
+  <button class="tab" data-tab="account">👤 Cuenta</button>
+  <button class="tab" data-tab="logs">📜 Registros</button>
 </nav>
 
 <main>
   <section id="tab-dashboard" class="tab-page active">
+    <div class="stat-row">
+      <div class="stat-card"><span class="stat-value" id="stat-metal">—</span><span class="stat-label metal">Metal total</span></div>
+      <div class="stat-card"><span class="stat-value" id="stat-crystal">—</span><span class="stat-label crystal">Cristal total</span></div>
+      <div class="stat-card"><span class="stat-value" id="stat-deut">—</span><span class="stat-label deut">Deuterio total</span></div>
+      <div class="stat-card"><span class="stat-value" id="stat-attacks">0</span><span class="stat-label">Ataques lanzados</span></div>
+      <div class="stat-card"><span class="stat-value" id="stat-loot">0</span><span class="stat-label">Botín acumulado</span></div>
+    </div>
     <div class="grid">
       <div class="card">
         <h3>Estado del bot</h3>
@@ -45,11 +65,15 @@
         <div id="alerts" class="alerts">Sin alertas</div>
       </div>
       <div class="card wide">
+        <h3>Evolución de recursos</h3>
+        <canvas id="resource-chart" height="180"></canvas>
+        <div class="legend">
+          <span class="metal">■ Metal</span><span class="crystal">■ Cristal</span><span class="deut">■ Deuterio</span>
+        </div>
+      </div>
+      <div class="card wide">
         <h3>Módulos</h3>
-        <table id="modules-table">
-          <thead><tr><th>Módulo</th><th>Estado</th><th>Último resultado</th><th>Próxima ejecución</th></tr></thead>
-          <tbody></tbody>
-        </table>
+        <div id="modules-grid" class="modules-grid"></div>
       </div>
       <div class="card wide">
         <h3>Actividad en vivo</h3>
@@ -63,52 +87,76 @@
   </section>
 
   <section id="tab-fleet" class="tab-page">
-    <div class="card"><h3>Huecos de flota</h3><div id="fleet-slots" class="kv"></div></div>
+    <div class="card"><h3>Huecos de flota</h3><div id="fleet-slots" class="slots-row"></div></div>
     <div class="card wide"><h3>Flotas en movimiento</h3>
+      <div class="table-wrap">
       <table id="fleets-table">
         <thead><tr><th>Misión</th><th>Origen</th><th>Destino</th><th>Llegada</th><th>Retorno</th></tr></thead>
         <tbody></tbody>
       </table>
+      </div>
     </div>
   </section>
 
   <section id="tab-farmer" class="tab-page">
+    <div class="card">
+      <h3>Escanear sistema manualmente</h3>
+      <div class="scan-row">
+        <input type="number" id="scan-galaxy" placeholder="Galaxia" min="1" value="4">
+        <input type="number" id="scan-system" placeholder="Sistema" min="1" value="21">
+        <button class="btn" id="btn-scan">🔍 Escanear</button>
+      </div>
+    </div>
     <div class="card wide">
       <h3>Objetivos detectados</h3>
+      <div class="table-wrap">
       <table id="targets-table">
         <thead><tr><th>Coordenadas</th><th>Jugador</th><th>Inactivo</th><th>Botín estimado</th><th>Espiado</th><th>Ataques</th></tr></thead>
         <tbody></tbody>
       </table>
+      </div>
     </div>
   </section>
 
   <section id="tab-config" class="tab-page">
     <div id="config-container"></div>
-    <button id="btn-save-config" class="btn primary">Guardar configuración</button>
+    <button id="btn-save-config" class="btn primary">💾 Guardar configuración</button>
   </section>
 
   <section id="tab-account" class="tab-page">
-    <div class="card">
-      <h3>Cuenta de OGame</h3>
-      <form id="account-form">
-        <label>Universo <input name="universe" placeholder="p. ej. 130 o Andromeda" required></label>
-        <label>Idioma / comunidad
-          <select name="language">
-            <option value="es">Español (es)</option>
-            <option value="en">Inglés (en)</option>
-            <option value="de">Alemán (de)</option>
-            <option value="fr">Francés (fr)</option>
-            <option value="pt">Portugués (pt)</option>
-            <option value="it">Italiano (it)</option>
-            <option value="pl">Polaco (pl)</option>
-          </select>
-        </label>
-        <label>Usuario / email <input name="username" required></label>
-        <label>Contraseña <input name="password" type="password" required></label>
-        <label class="checkbox"><input type="checkbox" name="demo"> Modo demo (universo simulado, sin cuenta real)</label>
-        <button type="submit" class="btn primary">Guardar cuenta</button>
-        <p class="muted">El bot se conecta como el juego: login vía lobby de Gameforge. Si Gameforge pide captcha, haz un login manual en el navegador primero o usa el modo demo. Usar bots viola las reglas de OGame y puede costarte la cuenta.</p>
-      </form>
+    <div class="two-col">
+      <div class="card">
+        <h3>Cuenta de OGame</h3>
+        <form id="account-form">
+          <label>Universo <input name="universe" placeholder="p. ej. Andromeda" required></label>
+          <label>Idioma / comunidad
+            <select name="language">
+              <option value="es">Español (es)</option>
+              <option value="en">Inglés (en)</option>
+              <option value="de">Alemán (de)</option>
+              <option value="fr">Francés (fr)</option>
+              <option value="pt">Portugués (pt)</option>
+              <option value="it">Italiano (it)</option>
+              <option value="pl">Polaco (pl)</option>
+            </select>
+          </label>
+          <label>Usuario / email <input name="username" required></label>
+          <label>Contraseña <input name="password" type="password" required></label>
+          <label class="checkbox"><input type="checkbox" name="demo"> Modo demo (universo simulado, sin cuenta real)</label>
+          <button type="submit" class="btn primary">Guardar cuenta</button>
+          <p class="muted small">El bot se conecta como el juego: login vía lobby de Gameforge. Si Gameforge pide captcha, haz un login manual en el navegador primero. Usar bots viola las reglas de OGame y puede costarte la cuenta.</p>
+        </form>
+      </div>
+      <div class="card">
+        <h3>Notificaciones por Telegram</h3>
+        <p class="muted small">Recibe avisos de ataques, errores y eventos en tu móvil. Crea un bot con @BotFather para obtener el token, y consulta tu chat_id con @userinfobot.</p>
+        <form id="notify-form">
+          <label>Bot token <input name="token" placeholder="123456:ABC-DEF..."></label>
+          <label>Chat ID <input name="chat_id" placeholder="123456789"></label>
+          <label class="checkbox"><input type="checkbox" name="enabled"> Activar notificaciones</label>
+          <button type="submit" class="btn primary">Guardar y probar</button>
+        </form>
+      </div>
     </div>
   </section>
 
@@ -123,12 +171,14 @@
           <option value="error">Errores</option>
           <option value="attack">Ataques</option>
         </select>
+        <button class="btn small" id="btn-clear-live">Limpiar vista en vivo</button>
       </div>
       <div id="logs" class="logs"></div>
     </div>
   </section>
 </main>
 
+<div id="toasts" class="toasts"></div>
 <script src="/static/app.js"></script>
 </body>
 </html>

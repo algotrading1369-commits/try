@@ -154,4 +154,7 @@ class FarmerModule(Module):
             f"Ataque lanzado a [{target['galaxy']}:{target['system']}:{target['position']}] "
             f"botín estimado {int(loot):,} con {sum(ships.values())} naves".replace(",", "."),
         )
+        stats = self.ctx.db.bump_stat("farmer_attacks")
+        self.ctx.db.set_setting("farmer_loot", self.ctx.db.get_setting("farmer_loot", 0) + int(loot))
+        self.ctx.bus.publish("stats", attacks=stats.get("farmer_attacks", 0))
         return f"ataque a {target['galaxy']}:{target['system']}:{target['position']}"

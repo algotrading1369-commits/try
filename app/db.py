@@ -4,7 +4,9 @@ import sqlite3
 import threading
 import time
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+DATA_DIR = os.environ.get("DATA_DIR") or os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data"
+)
 
 
 class Database:
@@ -70,6 +72,16 @@ class Database:
                     status TEXT,
                     detail TEXT
                 );
+                CREATE TABLE IF NOT EXISTS snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    celestial_id INTEGER NOT NULL,
+                    name TEXT,
+                    metal REAL NOT NULL,
+                    crystal REAL NOT NULL,
+                    deuterium REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_snapshots_ts ON snapshots(ts);
                 """
             )
 
@@ -130,6 +142,27 @@ class Database:
             values = list(fields.values()) + list(coords)
             if assignments:
                 conn.execute(f"UPDATE targets SET {assignments} WHERE galaxy = ? AND system = ? AND position = ?", values)
+
+    def add_snapshot(self, celestial_id, name, metal, crystal, deuterium):
+        self.execute(
+            "INSERT INTO snapshots (ts, celestial_id, name, metal, crystal, deuterium) VALUES (?,?,?,?,?,?)",
+            (time.time(), celestial_id, name, metal, crystal, deuterium),
+        )
+
+    def history(self, since=0):
+        return self.query(
+            "SELECT * FROM snapshots WHERE ts > ? ORDER BY ts ASC LIMIT 5000",
+            (since,),
+        )
+
+    def prune_snapshots(self, keep_seconds=7 * 86400):
+        self.execute("DELETE FROM snapshots WHERE ts < ?", (time.time() - keep_seconds,))
+
+    def bump_stat(self, key, amount=1):
+        stats = self.get_setting("stats", {})
+        stats[key] = stats.get(key, 0) + amount
+        self.set_setting("stats", stats)
+        return stats
 
     def targets(self, only_inactive=True):
         sql = "SELECT * FROM targets"
