@@ -20,6 +20,8 @@ Inspirado en proyectos como [ogame.ninja](https://www.ogame.ninja), [ogame-tbot/
   | Expediciones | Envío periódico con plantilla de flota y tiempo de retención |
   | Auto-colonización | Modo automático: escanea la galaxia buscando posiciones libres (prefiere las de más campos: 7-9) y coloniza solo mientras tenga naves y huecos de flota; o coordenadas fijas si lo prefieres |
   | Transportes | Equilibra excedentes de recursos hacia el planeta principal |
+  | Mapeo galáctico | Escanea el universo en segundo plano (poco a poco, sin saltar el rate-limit) y guarda cada posición: jugador, rank, luna, escombros, inactivo y actividad |
+  | Caza | Apunta jugadores por nick y re-escanea sus sistemas periódicamente para registrar cuándo se conectan (actividad de la vista de galaxia) y descubrir sus horarios |
 - **Notificaciones Telegram**: ataques, fleet-save, errores y eventos importantes en tu móvil.
 - **Panel web en tiempo real** (SSE): tarjetas de recursos totales, gráfico de evolución, switches de módulos, alertas, imperio con colas y almacenes, flotas en vuelo, objetivos, escaneo manual de sistemas, configuración editable y registros filtrables.
 - **Modo demo**: universo simulado con 3 planetas, galaxia, espionaje, botín y ataques entrantes.

@@ -314,6 +314,12 @@ class MockClient:
                         continue
                     inactive = roll < 0.5
                     player_id = rnd.randint(100000, 999999)
+                    act_roll = rnd.random()
+                    activity = None
+                    if act_roll < 0.2:
+                        activity = rnd.randint(1, 59)
+                    elif act_roll < 0.35:
+                        activity = "active"
                     rows.append(
                         {
                             "position": position,
@@ -325,6 +331,7 @@ class MockClient:
                             "moon": rnd.random() < 0.2,
                             "debris": rnd.random() < 0.3,
                             "status": ["inactive"] if inactive else [],
+                            "activity": activity,
                         }
                     )
                 self.galaxy_cache[key] = rows

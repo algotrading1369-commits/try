@@ -112,6 +112,10 @@ class ScanIn(BaseModel):
     system: int
 
 
+class HuntIn(BaseModel):
+    player: str
+
+
 @app.get("/")
 def index():
     return FileResponse(os.path.join(WEB_DIR, "index.html"))
@@ -317,6 +321,36 @@ def action_scan(payload: ScanIn):
             found += 1
     bus.publish("log", level="info", module="manual", message=f"Escaneo manual {payload.galaxy}:{payload.system} — {found} inactivos")
     return {"ok": True, "found": found}
+
+
+@app.get("/api/map")
+def map_rows(inactive: bool = False, search: str = "", limit: int = 500):
+    return {
+        "rows": db.galaxy_rows(inactive_only=inactive, search=search, limit=min(limit, 2000)),
+        "stats": db.map_stats(),
+    }
+
+
+@app.get("/api/hunt")
+def hunt_overview():
+    return {"players": db.activity_summary(), "activity": db.recent_activity(100)}
+
+
+@app.post("/api/hunt")
+def hunt_add(payload: HuntIn):
+    name = payload.player.strip()
+    if not name:
+        raise HTTPException(400, "Nick vacío")
+    if not db.hunt_add(name):
+        raise HTTPException(400, "Ya estás cazando a ese jugador")
+    bus.publish("log", level="info", module="hunt", message=f"Ahora cazando a {name}")
+    return {"ok": True}
+
+
+@app.delete("/api/hunt/{player}")
+def hunt_delete(player: str):
+    db.hunt_remove(player)
+    return {"ok": True}
 
 
 @app.get("/api/events")

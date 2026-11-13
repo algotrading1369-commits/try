@@ -41,6 +41,7 @@
   <button class="tab" data-tab="planets">🪐 Imperio</button>
   <button class="tab" data-tab="fleet">🚀 Flotas</button>
   <button class="tab" data-tab="farmer">🎯 Objetivos</button>
+  <button class="tab" data-tab="hunt">🛠️ Caza</button>
   <button class="tab" data-tab="config">⚙️ Configuración</button>
   <button class="tab" data-tab="account">👤 Cuenta</button>
   <button class="tab" data-tab="logs">📜 Registros</button>
@@ -112,6 +113,50 @@
       <div class="table-wrap">
       <table id="targets-table">
         <thead><tr><th>Coordenadas</th><th>Jugador</th><th>Inactivo</th><th>Botín estimado</th><th>Espiado</th><th>Ataques</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-hunt" class="tab-page">
+    <div class="stat-row" id="map-stats"></div>
+    <div class="card">
+      <h3>Cazar a un jugador</h3>
+      <div class="scan-row">
+        <input type="text" id="hunt-nick" placeholder="Nick exacto del jugador">
+        <button class="btn" id="btn-hunt-add">🎯 Apuntar</button>
+      </div>
+      <p class="muted">Se registrarán las conexiones del jugador (actividad vista en la galaxia) para descubrir sus horarios. El módulo Caza re-escanea sus sistemas periódicamente; el Mapeo Galáctico encuentra dónde tiene planetas.</p>
+    </div>
+    <div class="card wide">
+      <h3>Jugadores apuntados</h3>
+      <div class="table-wrap">
+      <table id="hunt-table">
+        <thead><tr><th>Nick</th><th>Última actividad</th><th>Detecciones activas</th><th>Comprobaciones</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
+    <div class="card wide">
+      <h3>Registro de actividad</h3>
+      <div class="table-wrap">
+      <table id="activity-table">
+        <thead><tr><th>Cuándo</th><th>Nick</th><th>Posición</th><th>Actividad</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
+    <div class="card wide">
+      <h3>Mapa galáctico</h3>
+      <div class="scan-row">
+        <label class="check"><input type="checkbox" id="map-inactive"> Solo inactivos</label>
+        <input type="text" id="map-search" placeholder="Buscar nick…">
+        <button class="btn" id="btn-map-refresh">🔄</button>
+      </div>
+      <div class="table-wrap">
+      <table id="map-table">
+        <thead><tr><th>Coordenadas</th><th>Jugador</th><th>Rank</th><th>Inactivo</th><th>Actividad</th><th>Visto</th></tr></thead>
         <tbody></tbody>
       </table>
       </div>

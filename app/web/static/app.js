@@ -11,6 +11,7 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 const fmt = (n) => (typeof n === "number" ? Math.round(n).toLocaleString("es-ES") : n);
 const fmtTime = (ts) => new Date(ts * 1000).toLocaleTimeString("es-ES");
+const fmtDateTime = (ts) => new Date(ts * 1000).toLocaleString("es-ES");
 
 function escapeHtml(text) {
   const div = document.createElement("div");
@@ -61,6 +62,7 @@ function tab(name) {
   if (name === "planets") refreshPlanets();
   if (name === "fleet") refreshFleets();
   if (name === "farmer") refreshTargets();
+  if (name === "hunt") refreshHunt();
   if (name === "config") refreshConfig();
   if (name === "logs") refreshLogs();
   if (name === "account") refreshAccount();
@@ -277,6 +279,72 @@ async function refreshTargets() {
     </tr>`).join("") || '<tr><td colspan="6" class="muted">Sin objetivos. Activa el módulo Farmer o escanea un sistema manualmente.</td></tr>';
   } catch (e) { console.error(e); }
 }
+
+async function refreshHunt() {
+  try {
+    const [mapData, huntData] = await Promise.all([
+      api(`/api/map?inactive=${$("#map-inactive").checked}&search=${encodeURIComponent($("#map-search").value)}&limit=500`),
+      api("/api/hunt"),
+    ]);
+    const st = mapData.stats;
+    $("#map-stats").innerHTML = `
+      <div class="stat-card"><span class="stat-value">${fmt(st.positions)}</span><span class="stat-label">Posiciones</span></div>
+      <div class="stat-card"><span class="stat-value">${fmt(st.inactive)}</span><span class="stat-label">Inactivos</span></div>
+      <div class="stat-card"><span class="stat-value">${fmt(st.systems)}</span><span class="stat-label">Sistemas mapeados</span></div>
+      <div class="stat-card"><span class="stat-value">${fmt(st.players)}</span><span class="stat-label">Jugadores</span></div>
+      <div class="stat-card"><span class="stat-value">${fmt(st.hunted)}</span><span class="stat-label">Cazados</span></div>`;
+    $("#hunt-table tbody").innerHTML = (huntData.players || []).map((p) => `<tr>
+      <td><b>${escapeHtml(p.player)}</b></td>
+      <td>${p.last_seen ? fmtDateTime(p.last_seen) : "—"}</td>
+      <td>${p.active_count || 0} / ${p.checks || 0}</td>
+      <td>${p.checks || 0}</td>
+      <td><button class="btn danger" data-unhunt="${escapeHtml(p.player)}">✕</button></td>
+    </tr>`).join("") || '<tr><td colspan="5" class="muted">Nadie apuntado todavía.</td></tr>';
+    $$("#hunt-table [data-unhunt]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          await api(`/api/hunt/${encodeURIComponent(btn.dataset.unhunt)}`, { method: "DELETE" });
+          toast("Jugador retirado de la caza", "info");
+          refreshHunt();
+        } catch (e) { toast("Error: " + e.message, "error"); }
+      });
+    });
+    const actLabel = (a) => (a === "active" ? "🟢 activo ahora" : a && a !== "None" ? `🟡 hace ${a} min` : "⚪ sin señal");
+    $("#activity-table tbody").innerHTML = (huntData.activity || []).map((a) => `<tr>
+      <td>${fmtDateTime(a.ts)}</td>
+      <td><b>${escapeHtml(a.player)}</b></td>
+      <td>[${a.galaxy}:${a.system}:${a.position}]</td>
+      <td>${actLabel(a.activity)}</td>
+    </tr>`).join("") || '<tr><td colspan="4" class="muted">Sin registros de actividad todavía.</td></tr>';
+    $("#map-table tbody").innerHTML = (mapData.rows || []).map((r) => `<tr>
+      <td>[${r.galaxy}:${r.system}:${r.position}]</td>
+      <td>${escapeHtml(r.player || "—")}</td>
+      <td>${r.rank ? "#" + r.rank : "—"}</td>
+      <td>${r.inactive ? '<span class="badge inactive">inactivo</span>' : "—"}</td>
+      <td>${actLabel(r.activity)}</td>
+      <td>${r.seen_at ? fmtDateTime(r.seen_at) : "—"}</td>
+    </tr>`).join("") || '<tr><td colspan="6" class="muted">Mapa vacío. Activa el módulo Mapeo Galáctico o escanea sistemas.</td></tr>';
+  } catch (e) { console.error(e); }
+}
+
+$("#btn-hunt-add").addEventListener("click", async () => {
+  const nick = $("#hunt-nick").value.trim();
+  if (!nick) return;
+  try {
+    await api("/api/hunt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ player: nick }),
+    });
+    toast(`Cazando a <b>${escapeHtml(nick)}</b> 🎯`, "success");
+    $("#hunt-nick").value = "";
+    refreshHunt();
+  } catch (e) { toast("Error: " + e.message, "error"); }
+});
+
+$("#btn-map-refresh").addEventListener("click", refreshHunt);
+$("#map-inactive").addEventListener("change", refreshHunt);
+$("#map-search").addEventListener("keydown", (e) => { if (e.key === "Enter") refreshHunt(); });
 
 $("#btn-scan").addEventListener("click", async () => {
   const galaxy = parseInt($("#scan-galaxy").value);

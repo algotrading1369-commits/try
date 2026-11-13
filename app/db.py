@@ -39,6 +39,36 @@ class Database:
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS galaxy_map (
+                    galaxy INTEGER NOT NULL,
+                    system INTEGER NOT NULL,
+                    position INTEGER NOT NULL,
+                    player TEXT,
+                    player_id INTEGER,
+                    rank INTEGER,
+                    inactive INTEGER NOT NULL DEFAULT 0,
+                    moon INTEGER NOT NULL DEFAULT 0,
+                    debris INTEGER NOT NULL DEFAULT 0,
+                    activity TEXT,
+                    seen_at REAL NOT NULL,
+                    PRIMARY KEY (galaxy, system, position)
+                );
+                CREATE INDEX IF NOT EXISTS idx_galaxy_map_player ON galaxy_map(player);
+                CREATE TABLE IF NOT EXISTS activity_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    player TEXT NOT NULL,
+                    player_id INTEGER,
+                    galaxy INTEGER NOT NULL,
+                    system INTEGER NOT NULL,
+                    position INTEGER NOT NULL,
+                    activity TEXT,
+                    ts REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_activity_log_player ON activity_log(player, ts);
+                CREATE TABLE IF NOT EXISTS hunted (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    player TEXT UNIQUE NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     ts REAL NOT NULL,
@@ -170,3 +200,96 @@ class Database:
             sql += " WHERE inactive = 1"
         sql += " ORDER BY metal + crystal + deuterium DESC LIMIT 500"
         return self.query(sql)
+
+    def upsert_galaxy_row(self, galaxy, system, row):
+        self.execute(
+            """
+            INSERT INTO galaxy_map (galaxy, system, position, player, player_id, rank, inactive, moon, debris, activity, seen_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(galaxy, system, position) DO UPDATE SET
+                player = excluded.player, player_id = excluded.player_id, rank = excluded.rank,
+                inactive = excluded.inactive, moon = excluded.moon, debris = excluded.debris,
+                activity = excluded.activity, seen_at = excluded.seen_at
+            """,
+            (
+                galaxy,
+                system,
+                row.get("position", 0),
+                row.get("player"),
+                row.get("player_id"),
+                row.get("rank"),
+                1 if "inactive" in row.get("status", []) else 0,
+                1 if row.get("moon") else 0,
+                1 if row.get("debris") else 0,
+                str(row["activity"]) if row.get("activity") is not None else None,
+                time.time(),
+            ),
+        )
+
+    def map_stats(self):
+        return {
+            "positions": self.query("SELECT COUNT(*) AS n FROM galaxy_map")[0]["n"],
+            "inactive": self.query("SELECT COUNT(*) AS n FROM galaxy_map WHERE inactive = 1")[0]["n"],
+            "systems": self.query("SELECT COUNT(DISTINCT galaxy || ':' || system) AS n FROM galaxy_map")[0]["n"],
+            "players": self.query("SELECT COUNT(DISTINCT player_id) AS n FROM galaxy_map WHERE player_id IS NOT NULL")[0]["n"],
+            "hunted": self.query("SELECT COUNT(*) AS n FROM hunted")[0]["n"],
+        }
+
+    def galaxy_rows(self, inactive_only=False, search="", limit=500):
+        sql = "SELECT * FROM galaxy_map"
+        conditions = []
+        params = []
+        if inactive_only:
+            conditions.append("inactive = 1")
+        if search:
+            conditions.append("player LIKE ?")
+            params.append(f"%{search}%")
+        if conditions:
+            sql += " WHERE " + " AND ".join(conditions)
+        sql += " ORDER BY galaxy, system, position LIMIT ?"
+        params.append(limit)
+        return self.query(sql, params)
+
+    def hunted_list(self):
+        return [r["player"] for r in self.query("SELECT player FROM hunted ORDER BY player")]
+
+    def hunt_add(self, player):
+        with self.lock, self._connect() as conn:
+            cur = conn.execute("INSERT OR IGNORE INTO hunted (player) VALUES (?)", (player,))
+            return cur.rowcount > 0
+
+    def hunt_remove(self, player):
+        self.execute("DELETE FROM hunted WHERE player = ?", (player,))
+
+    def hunted_positions(self, rescan_limit):
+        return self.query(
+            """
+            SELECT g.galaxy, g.system, g.position, g.player, g.seen_at FROM galaxy_map g
+            JOIN hunted h ON h.player = g.player
+            ORDER BY g.seen_at ASC LIMIT ?
+            """,
+            (rescan_limit,),
+        )
+
+    def log_activity(self, player, player_id, galaxy, system, position, activity):
+        self.execute(
+            "INSERT INTO activity_log (player, player_id, galaxy, system, position, activity, ts) VALUES (?,?,?,?,?,?,?)",
+            (player, player_id, galaxy, system, position, str(activity) if activity is not None else None, time.time()),
+        )
+
+    def recent_activity(self, limit=100):
+        return self.query("SELECT * FROM activity_log ORDER BY ts DESC LIMIT ?", (limit,))
+
+    def activity_summary(self):
+        return self.query(
+            """
+            SELECT a.player,
+                   MAX(a.ts) AS last_seen,
+                   SUM(CASE WHEN a.activity IS NOT NULL THEN 1 ELSE 0 END) AS active_count,
+                   COUNT(*) AS checks
+            FROM activity_log a
+            JOIN hunted h ON h.player = a.player
+            GROUP BY a.player
+            ORDER BY last_seen DESC
+            """
+        )

@@ -13,6 +13,7 @@ from .modules.farmer import FarmerModule
 from .modules.fleet import ExpeditionModule, FleetSaveModule, TransportModule
 from .modules.sleep import SleepModule
 from .modules.colonize import ColonizeModule
+from .modules.mapper import GalaxyMapperModule, HuntModule
 
 MODULE_CLASSES = [
     FleetSaveModule,
@@ -24,6 +25,8 @@ MODULE_CLASSES = [
     ExpeditionModule,
     ColonizeModule,
     TransportModule,
+    GalaxyMapperModule,
+    HuntModule,
 ]
 
 DEFAULT_CONFIG = {
@@ -100,6 +103,19 @@ DEFAULT_CONFIG = {
         "interval": 60,
         "start_hour": 1,
         "end_hour": 8,
+    },
+    "mapper": {
+        "enabled": False,
+        "interval": 60,
+        "galaxies": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        "system_start": 1,
+        "system_end": 499,
+        "systems_per_run": 3,
+    },
+    "hunt": {
+        "enabled": False,
+        "interval": 300,
+        "rescan_per_run": 5,
     },
 }
 

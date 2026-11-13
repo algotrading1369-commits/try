@@ -395,6 +395,14 @@ class OGameClient:
             moon = row.find(rel=re.compile(r"moon\d*")) is not None
             debris = row.find(rel=re.compile(r"debris\d*")) is not None
             statuses = re.findall(r"(\w+)_filter", " ".join(classes))
+            activity = None
+            act_node = row.select_one(".activity")
+            if act_node is not None:
+                if "minute" in (act_node.get("class") or []):
+                    minutes = re.search(r"\d+", act_node.get("title", ""))
+                    activity = int(minutes.group()) if minutes else 0
+                else:
+                    activity = "active"
             rows.append(
                 {
                     "position": int(position.text) if position else 0,
@@ -406,6 +414,7 @@ class OGameClient:
                     "moon": moon,
                     "debris": debris,
                     "status": [s for s in statuses if s not in ("planet", "moon", "debris")],
+                    "activity": activity,
                 }
             )
         return rows
