@@ -13,12 +13,12 @@ Inspirado en proyectos como [ogame.ninja](https://www.ogame.ninja), [ogame-tbot/
   |---|---|
   | Fleet-save | Detecta ataques (event box) y despacha flota + recursos en expedición o reciclaje |
   | Modo noche | No interactúa con la cuenta en las horas configuradas (solo vigila ataques) |
-  | Edificios | Cola por planeta con orden de prioridad, niveles máximos y reservas |
+  | Edificios | Constructor inteligente: prioriza planta solar si hay déficit energético, almacenes si algún recurso roza el 90%, y equilibra las minas manteniendo la forma metal = cristal +5 = deuterio +3 (configurable con `mine_balance`) |
   | Investigación | Cola única con orden de prioridad y niveles máximos |
   | Hangar y defensas | Cuotas de naves y defensas por planeta, construcción por lotes |
   | Farmer | Escaneo rotativo de galaxias → espionaje de inactivos → informes → ataques con cargas calculadas |
   | Expediciones | Envío periódico con plantilla de flota y tiempo de retención |
-  | Auto-colonización | Envía naves colonizadoras a las coordenadas que indiques |
+  | Auto-colonización | Modo automático: escanea la galaxia buscando posiciones libres (prefiere las de más campos: 7-9) y coloniza solo mientras tenga naves y huecos de flota; o coordenadas fijas si lo prefieres |
   | Transportes | Equilibra excedentes de recursos hacia el planeta principal |
 - **Notificaciones Telegram**: ataques, fleet-save, errores y eventos importantes en tu móvil.
 - **Panel web en tiempo real** (SSE): tarjetas de recursos totales, gráfico de evolución, switches de módulos, alertas, imperio con colas y almacenes, flotas en vuelo, objetivos, escaneo manual de sistemas, configuración editable y registros filtrables.

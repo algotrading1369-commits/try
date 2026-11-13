@@ -30,7 +30,10 @@ DEFAULT_CONFIG = {
     "buildings": {
         "enabled": True,
         "interval": 120,
+        "smart": True,
         "order": [1, 2, 3, 4, 22, 23, 24, 14, 21, 31, 15, 12, 36],
+        "mine_balance": {"metal": 0, "crystal": -5, "deuterium": -3},
+        "roi_ratio": [2.5, 1.5, 1],
         "max_levels": {"metal_mine": 45, "crystal_mine": 42, "deuterium_mine": 40},
         "reserves": {"metal": 0, "crystal": 0, "deuterium": 0},
     },
@@ -86,6 +89,10 @@ DEFAULT_CONFIG = {
         "enabled": False,
         "interval": 900,
         "origin_id": 0,
+        "auto": True,
+        "galaxy": 1,
+        "system_start": 1,
+        "system_end": 50,
         "coords": [],
     },
     "sleep": {
