@@ -87,6 +87,7 @@ class AccountIn(BaseModel):
     password: str = ""
     demo: bool = False
     session_token: str = ""
+    game_cookies: str = ""
 
 
 class ConfigIn(BaseModel):
@@ -205,6 +206,29 @@ def save_account(payload: AccountIn):
     token = payload.session_token.strip().strip('"').strip("'")
     if token.lower().startswith("gf-token-production="):
         token = token.split("=", 1)[1].strip().strip('"').strip("'")
+    game_cookies = payload.game_cookies.strip()
+    if game_cookies.lower().startswith("cookie:"):
+        game_cookies = game_cookies.split(":", 1)[1].strip()
+    if game_cookies and not payload.demo:
+        import requests as rq
+        number = None
+        try:
+            servers = rq.get("https://lobby.ogame.gameforge.com/api/servers", timeout=20).json()
+            for server in servers:
+                if str(server.get("name", "")).lower() == payload.universe.lower() and server.get("language") == payload.language:
+                    number = server["number"]
+                    break
+        except Exception:
+            pass
+        if number is None:
+            raise HTTPException(400, f"No encontré el universo {payload.universe} ({payload.language}): revisa el nombre")
+        check = rq.get(
+            f"https://s{number}-{payload.language}.ogame.gameforge.com/game/index.php?page=ingame",
+            headers={"Cookie": game_cookies, "User-Agent": "Mozilla/5.0"},
+            timeout=20,
+        )
+        if check.status_code != 200 or "ogame-player-name" not in check.text:
+            raise HTTPException(400, "La sesión de juego no es válida: entra al juego en el navegador y copia la cookie PHPSESSID del dominio s277-es.ogame.gameforge.com mientras estás DENTRO")
     if token and not payload.demo:
         import requests as rq
         check = rq.get(
@@ -214,7 +238,7 @@ def save_account(payload: AccountIn):
         )
         if check.status_code != 200:
             raise HTTPException(400, "La cookie no es válida o ha caducado: entra en lobby.ogame.gameforge.com, asegúrate de estar dentro, y cópiala de nuevo")
-    db.save_account(payload.universe, payload.language, payload.username, payload.password, payload.demo, token)
+    db.save_account(payload.universe, payload.language, payload.username, payload.password, payload.demo, token, game_cookies)
     bus.publish("log", level="info", module="web", message="Cuenta guardada")
     return {"ok": True}
 
@@ -231,6 +255,7 @@ def get_account():
         "username": account["username"],
         "demo": bool(account["demo"]),
         "session_token": account["session_token"] if "session_token" in keys else "",
+        "game_cookies": account["game_cookies"] if "game_cookies" in keys else "",
     }
 
 

@@ -263,6 +263,13 @@
             <p><strong>Método 2</strong> (si el 1 no imprime nada): con la sesión abierta en el lobby → F12 → pestaña <strong>Application</strong> (Chrome/Edge) o <strong>Storage</strong> (Firefox) → <strong>Cookies</strong> → <code>https://lobby.ogame.gameforge.com</code> → busca la fila <code>gf-token-production</code> → doble clic en su <strong>Value</strong> y cópiala entera.</p>
             <label>Cookie gf-token-production <input name="session_token" placeholder="opcional, alternativa a la contraseña"></label>
           </details>
+          <details class="muted small">
+            <summary>❌ "El lobby rechazó la entrada (400)"? Usa la sesión de juego directa (el truco que siempre funciona)</summary>
+            <p>Esto salta por completo el login de Gameforge: el bot usa la sesión que TU navegador ya tiene dentro del juego.</p>
+            <p><strong>Pasos</strong>: entra al juego manualmente (lobby → Jugar en tu universo) y, <strong>estando DENTRO del juego</strong>: F12 → pestaña <strong>Application</strong> → <strong>Cookies</strong> → <code>https://s277-es.ogame.gameforge.com</code> → copia el <strong>Value</strong> de la fila <code>PHPSESSID</code> y pégalo aquí:</p>
+            <label>Sesión de juego directa (PHPSESSID) <input name="game_cookies" placeholder="opcional: pega aquí el valor de PHPSESSID"></label>
+            <p>Si deja de funcionar horas después, repite: entra al juego y copia una nueva. Mientras el bot esté corriendo, la sesión se mantiene viva sola.</p>
+          </details>
           <label class="checkbox"><input type="checkbox" name="demo"> Modo demo (universo simulado, sin cuenta real)</label>
           <button type="submit" class="btn primary">Guardar cuenta</button>
           <div id="account-msg" class="muted small"></div>

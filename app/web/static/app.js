@@ -470,6 +470,7 @@ async function refreshAccount() {
   await loadUniverseOptions(form.language.value, acc.universe);
   form.username.value = acc.username;
   form.session_token.value = acc.session_token || "";
+  form.game_cookies.value = acc.game_cookies || "";
   form.demo.checked = !!acc.demo;
   const notify = await api("/api/notify");
   const nf = $("#notify-form");
@@ -516,8 +517,8 @@ $("#account-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const form = ev.target;
   const msg = $("#account-msg");
-  if (!form.password.value && !form.session_token.value && !form.demo.checked) {
-    msg.textContent = "❌ Necesitas la contraseña o una cookie de sesión (o activa el modo demo)";
+  if (!form.password.value && !form.session_token.value && !form.game_cookies.value.trim() && !form.demo.checked) {
+    msg.textContent = "❌ Necesitas la contraseña, una cookie de sesión o una sesión de juego directa (o activa el modo demo)";
     return;
   }
   msg.textContent = "Guardando…";
@@ -532,9 +533,10 @@ $("#account-form").addEventListener("submit", async (ev) => {
         password: form.password.value,
         demo: form.demo.checked,
         session_token: form.session_token.value.trim(),
+        game_cookies: form.game_cookies.value.trim(),
       }),
     });
-    msg.textContent = "✅ Cuenta guardada y cookie validada. Pulsa Iniciar arriba.";
+    msg.textContent = "✅ Cuenta guardada y sesión validada. Pulsa Iniciar arriba.";
     toast("Cuenta guardada. Ya puedes iniciar el bot.", "success");
     refreshStatus();
   } catch (e) {

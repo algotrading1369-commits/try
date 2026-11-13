@@ -50,12 +50,13 @@ def _to_int(text):
 
 
 class OGameClient:
-    def __init__(self, universe, language, username, password, user_agent=None, session_token=None):
+    def __init__(self, universe, language, username, password, user_agent=None, session_token=None, game_cookies=None):
         self.universe = universe
         self.language = language
         self.username = username
         self.password = password
         self.session_token = session_token
+        self.game_cookies = game_cookies
         self.user_agent = user_agent or random_user_agent()
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": self.user_agent})
@@ -89,6 +90,9 @@ class OGameClient:
         return resp
 
     def login(self):
+        if self.game_cookies:
+            self._enter_game_direct()
+            return
         self.session.get(LOBBY + "/")
         if self.session_token:
             token = self.session_token.strip().strip('"').strip("'")
@@ -156,6 +160,63 @@ class OGameClient:
         self._resolve_server()
         self._enter_game()
 
+    def _apply_game_cookies(self, raw):
+        raw = raw.strip()
+        if raw.lower().startswith("cookie:"):
+            raw = raw.split(":", 1)[1].strip()
+        pairs = {}
+        for part in raw.split(";"):
+            part = part.strip()
+            if "=" in part:
+                key, value = part.split("=", 1)
+                pairs[key.strip()] = value.strip().strip('"').strip("'")
+        if not pairs:
+            pairs = {"PHPSESSID": raw.strip().strip('"').strip("'")}
+        domain = f"s{self.server_number}-{self.language}.ogame.gameforge.com"
+        for key, value in pairs.items():
+            self.session.cookies.set(key, value, domain=domain, path="/")
+        return pairs
+
+    def _enter_game_direct(self):
+        if self.server_number is None:
+            try:
+                servers = self.session.get(LOBBY + "/api/servers", timeout=30).json()
+                for server in servers:
+                    if str(server.get("name", "")).lower() == self.universe.lower() and server.get("language") == self.language:
+                        self.server_number = server["number"]
+                        break
+            except Exception:
+                pass
+            if self.server_number is None:
+                raise LoginError(f"No encontré el universo {self.universe} ({self.language}) en la lista de servidores")
+        self._apply_game_cookies(self.game_cookies)
+        self.index_php = f"https://s{self.server_number}-{self.language}.ogame.gameforge.com/game/index.php?"
+        try:
+            page = self._get(self.index_php + "page=ingame").text
+        except requests.RequestException as exc:
+            raise LoginError(f"El servidor del juego no respondió: {exc}")
+        if not self._parse_ingame(page):
+            raise LoginError(
+                "La sesión de juego no es válida (el servidor manda al lobby): entra al juego manualmente en el navegador, "
+                "copia la cookie PHPSESSID de s277-es.ogame.gameforge.com mientras estás DENTRO, y guárdala de nuevo"
+            )
+
+    def _parse_ingame(self, page):
+        soup = BeautifulSoup(page, "html.parser")
+        player_name = soup.find("meta", {"name": "ogame-player-name"})
+        player_id = soup.find("meta", {"name": "ogame-player-id"})
+        if player_name is None or player_id is None:
+            return False
+        self.player = player_name["content"]
+        self.player_id = int(player_id["content"])
+        version = soup.find("meta", {"name": "ogame-version"})
+        self.server_version = version["content"] if version else None
+        speed = soup.find("meta", {"name": "ogame-universe-speed"})
+        fspeed = soup.find("meta", {"name": "ogame-universe-speed-fleet-peaceful"})
+        self.universe_speed = int(speed["content"]) if speed else 1
+        self.fleet_speed = int(fspeed["content"]) if fspeed else 1
+        return True
+
     def _resolve_server(self):
         try:
             servers = self.session.get(LOBBY + "/api/servers", timeout=30, headers={"Referer": LOBBY + "/", "Accept": "application/json"}).json()
@@ -203,51 +264,55 @@ class OGameClient:
             raise LoginError(f"La cuenta no tiene personaje en {self.universe} ({self.language})")
 
     def _enter_game(self):
-        try:
-            resp = self.session.post(
-                LOBBY + "/api/users/me/loginLink",
-                json={
-                    "id": self.server_id,
-                    "server": {"language": self.language, "number": self.server_number},
-                    "clickedButton": "account_list",
-                    "blackbox": generate_blackbox(self.session, self.user_agent),
-                },
-                timeout=30,
-                headers={
-                    "Origin": LOBBY,
-                    "Referer": LOBBY + "/",
-                    "Accept": "application/json",
-                },
-            )
-        except requests.RequestException as exc:
-            raise LoginError(f"No se pudo contactar con el lobby para entrar al juego: {exc}")
-        try:
-            link = resp.json()
-        except ValueError:
-            raise LoginError(f"El lobby respondió {resp.status_code} sin JSON al pedir el enlace de entrada: {resp.text[:200]}")
+        variants = [
+            {},
+            {"blackbox": ""},
+            {"ageVerificationIgnored": "1"},
+        ]
+        resp = None
+        link = None
+        for extra in variants:
+            body = {
+                "id": self.server_id,
+                "server": {"language": self.language, "number": self.server_number},
+                "clickedButton": "account_list",
+                "blackbox": generate_blackbox(self.session, self.user_agent),
+            }
+            body.update(extra)
+            try:
+                resp = self.session.post(
+                    LOBBY + "/api/users/me/loginLink",
+                    json=body,
+                    timeout=30,
+                    headers={
+                        "Origin": LOBBY,
+                        "Referer": LOBBY + "/",
+                        "Accept": "application/json",
+                    },
+                )
+            except requests.RequestException as exc:
+                raise LoginError(f"No se pudo contactar con el lobby para entrar al juego: {exc}")
+            try:
+                link = resp.json()
+            except ValueError:
+                link = None
+            if isinstance(link, dict) and "url" in link:
+                break
         if not isinstance(link, dict) or "url" not in link:
-            if resp.status_code in (401, 403) and "not logged in" in str(link):
+            if resp is not None and resp.status_code in (401, 403) and "not logged in" in str(link):
                 raise LoginError("El lobby dice que la sesión ya no está activa: la cookie se rotó o caducó. Vuelve a copiarla del navegador y guárdala otra vez")
-            raise LoginError(f"El lobby rechazó la entrada ({resp.status_code}): {str(link)[:200]}")
+            raise LoginError(
+                f"El lobby rechazó la entrada ({resp.status_code if resp is not None else '?'}): {str(link)[:200]}. "
+                "Si puedes entrar al juego manualmente en tu navegador, usa abajo el método 'Sesión de juego directa'"
+            )
         self.index_php = f"https://s{self.server_number}-{self.language}.ogame.gameforge.com/game/index.php?"
         try:
             self._get(link["url"])
             page = self._get(self.index_php + "page=ingame").text
         except requests.RequestException as exc:
             raise LoginError(f"El servidor del juego no cargó la página: {exc}")
-        soup = BeautifulSoup(page, "html.parser")
-        player_name = soup.find("meta", {"name": "ogame-player-name"})
-        player_id = soup.find("meta", {"name": "ogame-player-id"})
-        if player_name is None or player_id is None:
+        if not self._parse_ingame(page):
             raise LoginError("Entramos al juego pero la página no cargó la cuenta (posible mantenimiento del universo o sesión rechazada)")
-        self.player = player_name["content"]
-        self.player_id = int(player_id["content"])
-        version = soup.find("meta", {"name": "ogame-version"})
-        self.server_version = version["content"] if version else None
-        speed = soup.find("meta", {"name": "ogame-universe-speed"})
-        fspeed = soup.find("meta", {"name": "ogame-universe-speed-fleet-peaceful"})
-        self.universe_speed = int(speed["content"]) if speed else 1
-        self.fleet_speed = int(fspeed["content"]) if fspeed else 1
 
     def is_logged_in(self):
         try:

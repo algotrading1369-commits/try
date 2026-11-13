@@ -269,6 +269,7 @@ class BotEngine:
             account["username"],
             account["password"],
             session_token=(account["session_token"] if "session_token" in account.keys() else None) or None,
+            game_cookies=(account["game_cookies"] if "game_cookies" in account.keys() else None) or None,
         )
         client.login()
         return client
