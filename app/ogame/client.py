@@ -6,13 +6,25 @@ import requests
 from bs4 import BeautifulSoup
 
 from . import constants as c
+from .blackbox import generate_blackbox, random_user_agent
 
 LOBBY = "https://lobby.ogame.gameforge.com"
-GF_AUTH = "https://gameforge.com/api/v1/auth/thin/sessions"
+GF_AUTH = "https://spark.gameforge.com/api/v2/authProviders/mauth/sessions"
+
+PLATFORM_GAME_ID = "1dfd8e7e-6e1a-4eb1-8c64-03c3b62efd2f"
+GAME_ENVIRONMENT_ID = "0a31d605-ffaf-43e7-aa02-d06df7116fc8"
+
+LOCALES = {
+    "es": "es-ES", "en": "en-GB", "de": "de-DE", "fr": "fr-FR", "pl": "pl-PL",
+    "it": "it-IT", "ru": "ru-RU", "tr": "tr-TR", "pt": "pt-PT", "nl": "nl-NL",
+    "hu": "hu-HU", "cs": "cs-CZ", "ro": "ro-RO", "sk": "sk-SK", "bg": "bg-BG",
+    "el": "el-GR", "da": "da-DK", "fi": "fi-FI", "sv": "sv-SE", "no": "nb-NO",
+    "ar": "ar-AE", "hr": "hr-HR", "sl": "sl-SI", "sr": "sr-RS", "uk": "uk-UA",
+}
 
 USER_AGENT = (
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
 )
 
 
@@ -37,13 +49,14 @@ def _to_int(text):
 
 
 class OGameClient:
-    def __init__(self, universe, language, username, password, user_agent=USER_AGENT):
+    def __init__(self, universe, language, username, password, user_agent=None):
         self.universe = universe
         self.language = language
         self.username = username
         self.password = password
+        self.user_agent = user_agent or random_user_agent()
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": user_agent})
+        self.session.headers.update({"User-Agent": self.user_agent})
         self.token = None
         self.server_number = None
         self.server_id = None
@@ -78,23 +91,37 @@ class OGameClient:
         payload = {
             "identity": self.username,
             "password": self.password,
-            "locale": f"{self.language}_{self.language.upper()}",
+            "locale": LOCALES.get(self.language, f"{self.language}-{self.language.upper()}"),
             "gfLang": self.language,
-            "platformGameId": "1dfd8e7e-6e1a-4eb1-8c64-03c3b62efd2f",
-            "gameEnvironmentId": "0a31d605-ffaf-43e7-aa02-d06df7116fc8",
-            "autoGameAccountCreation": False,
+            "gameId": PLATFORM_GAME_ID,
+            "gameEnvironmentId": GAME_ENVIRONMENT_ID,
+            "blackbox": generate_blackbox(self.session, self.user_agent),
         }
         resp = self.session.post(GF_AUTH, json=payload, timeout=30)
-        if resp.status_code == 409:
-            raise CaptchaRequired("Gameforge pide captcha; inicia sesión manualmente y usa cookies o reintenta más tarde")
-        if resp.status_code in (400, 401, 403):
-            raise LoginError(
-                "Gameforge rechazó las credenciales: usa el EMAIL de tu cuenta Gameforge "
-                "(no el nick del juego) y su contraseña; si tienes verificación en dos pasos no funcionará"
-            )
-        if resp.status_code != 201:
+        if resp.status_code == 201:
+            data = resp.json()
+            self.token = data.get("token")
+            if not self.token:
+                raise LoginError("Gameforge no devolvió token de sesión")
+        else:
+            error_types = ""
+            try:
+                error_types = ",".join(resp.json().get("errorTypes", []))
+            except Exception:
+                pass
+            if "OTP_REQUIRED" in error_types or "OTP_INVALID" in error_types:
+                raise LoginError(
+                    "Tu cuenta tiene verificación en dos pasos: desactívala en "
+                    "gameforge.com o no podrás usar el bot"
+                )
+            if "CREDENTIALS_INVALID" in error_types or resp.status_code in (400, 401, 403):
+                raise LoginError(
+                    "Gameforge rechazó las credenciales: usa el EMAIL de tu cuenta Gameforge "
+                    "(no el nick del juego) y su contraseña"
+                )
+            if resp.status_code == 409:
+                raise CaptchaRequired("Gameforge pide captcha; reintenta en unos minutos")
             raise LoginError(f"Login fallido ({resp.status_code}): Gameforge no aceptó la sesión")
-        self.token = resp.json()["token"]
         self.session.headers.update({"authorization": f"Bearer {self.token}"})
         self._resolve_server()
         self._enter_game()
@@ -162,7 +189,8 @@ class OGameClient:
         except Exception:
             pass
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": USER_AGENT})
+        self.user_agent = random_user_agent()
+        self.session.headers.update({"User-Agent": self.user_agent})
         self.token = None
         self.login()
 
