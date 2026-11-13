@@ -112,6 +112,21 @@ class ScanIn(BaseModel):
     system: int
 
 
+class FleetIn(BaseModel):
+    origin_id: int
+    mission: int
+    galaxy: int
+    system: int
+    position: int
+    dest_type: int = 1
+    ships: dict
+    metal: int = 0
+    crystal: int = 0
+    deuterium: int = 0
+    speed: int = 10
+    holding_time: int = 0
+
+
 class HuntIn(BaseModel):
     player: str
 
@@ -144,6 +159,14 @@ def status():
     ]
     data["stats"] = db.get_setting("stats", {})
     data["farmer_loot"] = db.get_setting("farmer_loot", 0)
+    from .ogame import constants as c
+
+    data["ships_catalog"] = [
+        {"id": sid, "name": info["name"]} for sid, info in sorted(c.SHIPS.items())
+    ]
+    data["defenses_catalog"] = [
+        {"id": did, "name": info["name"]} for did, info in sorted(c.DEFENSES.items())
+    ]
     return data
 
 
@@ -321,6 +344,77 @@ def action_scan(payload: ScanIn):
             found += 1
     bus.publish("log", level="info", module="manual", message=f"Escaneo manual {payload.galaxy}:{payload.system} — {found} inactivos")
     return {"ok": True, "found": found}
+
+
+@app.get("/api/galaxy")
+def galaxy_view(galaxy: int, system: int):
+    if engine.client is None:
+        raise HTTPException(400, "El bot no está iniciado")
+    try:
+        rows = engine.client.galaxy(galaxy, system)
+    except Exception as exc:
+        raise HTTPException(502, f"Error escaneando {galaxy}:{system}: {exc}")
+    for row in rows:
+        if row.get("empty") or not row.get("player"):
+            continue
+        db.upsert_galaxy_row(galaxy, system, row)
+    return {
+        "galaxy": galaxy,
+        "system": system,
+        "rows": [
+            {
+                "position": row.get("position"),
+                "player": row.get("player"),
+                "rank": row.get("rank"),
+                "inactive": "inactive" in row.get("status", []),
+                "moon": bool(row.get("moon")),
+                "debris": bool(row.get("debris")),
+                "activity": row.get("activity"),
+            }
+            for row in rows
+            if not row.get("empty")
+        ],
+    }
+
+
+@app.post("/api/action/fleet")
+def action_fleet(payload: FleetIn):
+    if engine.client is None:
+        raise HTTPException(400, "El bot no está iniciado")
+    allowed = {1, 2, 3, 4, 5, 6, 7, 8, 9, 15}
+    if payload.mission not in allowed:
+        raise HTTPException(400, "Misión no válida")
+    ships = {}
+    for sid, amount in payload.ships.items():
+        try:
+            count = int(amount)
+        except (TypeError, ValueError):
+            continue
+        if count > 0:
+            ships[int(sid)] = count
+    if not ships:
+        raise HTTPException(400, "Sin naves")
+    destination = [payload.galaxy, payload.system, payload.position, payload.dest_type]
+    try:
+        result = engine.client.send_fleet(
+            payload.origin_id,
+            payload.mission,
+            destination,
+            ships,
+            (payload.metal, payload.crystal, payload.deuterium),
+            speed=max(1, min(10, payload.speed)),
+            holding_time=max(0, payload.holding_time),
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"No se pudo enviar la flota: {exc}")
+    if isinstance(result, dict) and not result.get("success", True):
+        raise HTTPException(400, result.get("errorMessage", "Envío rechazado"))
+    db.add_log(
+        "info", "manual",
+        f"Flota manual: misión {payload.mission} a {payload.galaxy}:{payload.system}:{payload.position}",
+    )
+    bus.publish("log", level="info", module="manual", message=f"Flota manual enviada a {payload.galaxy}:{payload.system}:{payload.position}")
+    return {"ok": True}
 
 
 @app.get("/api/map")

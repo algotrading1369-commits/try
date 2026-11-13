@@ -76,6 +76,9 @@ DEFAULT_CONFIG = {
         "fleet": {"204": 50, "202": 20, "210": 1, "219": 1},
         "holding_time": 1,
         "coords": [16, 16, 1],
+        "galaxy": 0,
+        "system_start": 0,
+        "system_end": 0,
     },
     "fleetsave": {
         "enabled": True,
@@ -129,6 +132,11 @@ DEFAULT_CONFIG = {
         "hunted_online_minutes": 15,
         "alert_inactive_recovered": True,
         "repeat_cooldown": 3600,
+    },
+    "schedule": {
+        "enabled": False,
+        "start_hour": 3,
+        "end_hour": 8,
     },
     "transport": {
         "enabled": False,
@@ -290,8 +298,21 @@ class BotEngine:
     def _tick(self):
         if self.state.get("paused"):
             return
+        sched = self.ctx.config_for("schedule")
+        powered_off = False
+        if sched.get("enabled"):
+            hour = time.localtime().tm_hour
+            start_h = int(sched.get("start_hour", 3))
+            end_h = int(sched.get("end_hour", 8))
+            if start_h <= end_h:
+                powered_off = start_h <= hour < end_h
+            else:
+                powered_off = hour >= start_h or hour < end_h
         with self.state_lock:
+            self.state["powered_off"] = powered_off
             self.state["ticks"] += 1
+        if powered_off:
+            return
         try:
             box = self.ctx.client.event_box()
             with self.state_lock:

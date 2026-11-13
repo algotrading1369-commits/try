@@ -42,6 +42,7 @@
   <button class="tab" data-tab="fleet">🚀 Flotas</button>
   <button class="tab" data-tab="farmer">🎯 Objetivos</button>
   <button class="tab" data-tab="hunt">🛠️ Caza</button>
+  <button class="tab" data-tab="galaxy">🌌 Galaxia</button>
   <button class="tab" data-tab="config">⚙️ Configuración</button>
   <button class="tab" data-tab="account">👤 Cuenta</button>
   <button class="tab" data-tab="logs">📜 Registros</button>
@@ -89,6 +90,47 @@
 
   <section id="tab-fleet" class="tab-page">
     <div class="card"><h3>Huecos de flota</h3><div id="fleet-slots" class="slots-row"></div></div>
+    <div class="card wide"><h3>🚲 Enviar flota manualmente</h3>
+      <div class="config-row">
+        <label>Origen<select id="mf-origin"></select></label>
+        <label>Misión<select id="mf-mission">
+          <option value="6">🕵️ Espionaje</option>
+          <option value="3">📦 Transporte</option>
+          <option value="4">🏛️ Despliegue</option>
+          <option value="1">⚔️ Ataque</option>
+          <option value="7">🌱 Colonización</option>
+          <option value="8">♻️ Reciclaje</option>
+          <option value="15">🚀 Expedición</option>
+        </select></label>
+        <label>Galaxia<input type="number" id="mf-galaxy" value="4" min="1"></label>
+        <label>Sistema<input type="number" id="mf-system" value="21" min="1"></label>
+        <label>Posición<input type="number" id="mf-position" value="16" min="1" max="16"></label>
+        <label>Destino<select id="mf-dest">
+          <option value="1">Planeta</option>
+          <option value="3">Luna</option>
+          <option value="2">Escombros</option>
+        </select></label>
+        <label>Naves (JSON)<input id="mf-ships" placeholder='{"204": 50, "210": 1}'></label>
+        <label>Metal<input type="number" id="mf-metal" value="0" min="0"></label>
+        <label>Cristal<input type="number" id="mf-crystal" value="0" min="0"></label>
+        <label>Deuterio<input type="number" id="mf-deuterium" value="0" min="0"></label>
+        <label>Velocidad<input type="number" id="mf-speed" value="10" min="1" max="10"></label>
+        <label>Retención (h)<input type="number" id="mf-holding" value="0" min="0"></label>
+      </div>
+      <button class="btn primary" id="btn-mf-send">🚀 Enviar flota</button>
+    </div>
+    <div class="card wide"><h3>🏭 Construir naves o defensas</h3>
+      <div class="config-row">
+        <label>Planeta<select id="mb-planet"></select></label>
+        <label>Tipo<select id="mb-kind">
+          <option value="ships">Naves</option>
+          <option value="defenses">Defensas</option>
+        </select></label>
+        <label>¿Qué?<select id="mb-tech"></select></label>
+        <label>Cantidad<input type="number" id="mb-amount" value="10" min="1"></label>
+      </div>
+      <button class="btn primary" id="btn-mb-build">🏭 Construir</button>
+    </div>
     <div class="card wide"><h3>Flotas en movimiento</h3>
       <div class="table-wrap">
       <table id="fleets-table">
@@ -113,6 +155,27 @@
       <div class="table-wrap">
       <table id="targets-table">
         <thead><tr><th>Coordenadas</th><th>Jugador</th><th>Inactivo</th><th>Botín estimado</th><th>Espiado</th><th>Ataques</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-galaxy" class="tab-page">
+    <div class="card">
+      <h3>Escaneo en vivo</h3>
+      <div class="scan-row">
+        <input type="number" id="gv-galaxy" placeholder="Galaxia" min="1" value="4">
+        <input type="number" id="gv-system" placeholder="Sistema" min="1" value="21">
+        <button class="btn" id="btn-gv-scan">🔍 Escanear</button>
+      </div>
+      <div id="gv-meta" class="muted"></div>
+    </div>
+    <div class="card wide">
+      <h3>Sistema escaneado</h3>
+      <div class="table-wrap">
+      <table id="galaxy-table">
+        <thead><tr><th>Pos</th><th>Jugador</th><th>Rango</th><th>Actividad</th><th>Luna</th><th>Escombros</th><th>Inactivo</th></tr></thead>
         <tbody></tbody>
       </table>
       </div>

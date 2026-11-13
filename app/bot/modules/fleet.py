@@ -1,7 +1,7 @@
 import random
 import time
 
-from ..base import Module, total_ships
+from ..base import Module, planets_only, total_ships
 from ...ogame import constants as c
 
 
@@ -23,6 +23,16 @@ class ExpeditionModule(Module):
         fleet_template = cfg.get("fleet", {"204": 50, "202": 20, "210": 1, "219": 1})
         holding_time = int(cfg.get("holding_time", 1))
         coords = cfg.get("coords", [16, 16, 1])
+        galaxy = int(cfg.get("galaxy", 0)) or int(coords[0])
+        system_start = int(cfg.get("system_start", 0))
+        system_end = int(cfg.get("system_end", 0))
+        if system_end > 0:
+            start = max(1, system_start or 1)
+            system = random.randint(start, max(start, system_end))
+        else:
+            system = int(coords[1])
+        if not galaxy:
+            galaxy = planets[0]["coords"][0]
 
         slots = self.ctx.client.fleet_slots()
         if slots["fleet"]["used"] >= slots["fleet"]["total"]:
@@ -41,7 +51,7 @@ class ExpeditionModule(Module):
         if 210 not in ships and 219 not in ships:
             return "se necesita al menos una sonda o pathfinder"
 
-        destination = [int(coords[0]), int(coords[1]), 16, c.DEST_PLANET]
+        destination = [galaxy, system, 16, c.DEST_PLANET]
         try:
             self.ctx.client.send_fleet(
                 origin_id,
@@ -53,8 +63,8 @@ class ExpeditionModule(Module):
         except Exception as exc:
             self.ctx.log("warning", f"Expedición fallida: {exc}")
             return "expedición fallida"
-        self.ctx.log("info", f"Expedición enviada a {destination[0]}:{destination[1]}:16 por {holding_time}h")
-        return "expedición enviada"
+        self.ctx.log("info", f"Expedición enviada a {galaxy}:{system}:16 por {holding_time}h")
+        return f"expedición enviada a {galaxy}:{system}:16"
 
 
 class FleetSaveModule(Module):

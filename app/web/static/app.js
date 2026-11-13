@@ -63,6 +63,7 @@ function tab(name) {
   if (name === "fleet") refreshFleets();
   if (name === "farmer") refreshTargets();
   if (name === "hunt") refreshHunt();
+  if (name === "galaxy") refreshGalaxy();
   if (name === "config") refreshConfig();
   if (name === "logs") refreshLogs();
   if (name === "account") refreshAccount();
@@ -109,6 +110,7 @@ function renderStatus() {
   const items = [];
   if (box.hostile > 0) items.push(`<div class="alert danger">⚠️ ¡Ataque hostil detectado! (${box.hostile} flotas)</div>`);
   if (s.sleeping) items.push('<div class="alert night">🌙 Modo noche activo: solo se vigilan ataques</div>');
+  if (s.powered_off) items.push('<div class="alert night">⏻ Apagado programado activo: el bot no hace nada en esta franja horaria</div>');
   if (s.last_results && s.last_results.fleetsave && Date.now() / 1000 - s.last_results.fleetsave.ts < 600)
     items.push(`<div class="alert danger">🚨 Fleet-save ejecutado: ${escapeHtml(s.last_results.fleetsave.detail)}</div>`);
   if (!items.length) items.push('<div class="alert ok">✓ Sin amenazas. Todo en orden.</div>');
@@ -250,6 +252,10 @@ async function refreshPlanets() {
 async function refreshFleets() {
   try {
     const data = await api("/api/fleets");
+    if (!state.planets) {
+      try { state.planets = await api("/api/planets"); } catch {}
+    }
+    populateFleetForms(state.planets || { planets: [] });
     $("#fleet-slots").innerHTML = `
       <span class="slot">🚀 Flota <b>${data.slots.fleet.used}</b> / ${data.slots.fleet.total}</span>
       <span class="slot">🌌 Expediciones <b>${data.slots.expedition.used}</b> / ${data.slots.expedition.total}</span>`;
@@ -345,6 +351,103 @@ $("#btn-hunt-add").addEventListener("click", async () => {
 $("#btn-map-refresh").addEventListener("click", refreshHunt);
 $("#map-inactive").addEventListener("change", refreshHunt);
 $("#map-search").addEventListener("keydown", (e) => { if (e.key === "Enter") refreshHunt(); });
+
+async function refreshGalaxy() {
+  const galaxy = parseInt($("#gv-galaxy").value) || 1;
+  const system = parseInt($("#gv-system").value) || 1;
+  await loadGalaxy(galaxy, system);
+}
+
+async function loadGalaxy(galaxy, system) {
+  try {
+    const data = await api(`/api/galaxy?galaxy=${galaxy}&system=${system}`);
+    const actLabel = (a) => (a === "active" ? "🟢 activo ahora" : a && a !== "None" ? `🟡 hace ${a} min` : "⚪ sin señal");
+    $("#gv-meta").textContent = `Sistema ${data.galaxy}:${data.system} — ${data.rows.length} posiciones ocupadas`;
+    $("#galaxy-table tbody").innerHTML = data.rows.map((r) => `<tr>
+      <td>${r.position}</td>
+      <td><b>${escapeHtml(r.player || "")}</b></td>
+      <td>${r.rank ? "#" + r.rank : "—"}</td>
+      <td>${actLabel(r.activity)}</td>
+      <td>${r.moon ? "🌙" : "—"}</td>
+      <td>${r.debris ? "⚙️" : "—"}</td>
+      <td>${r.inactive ? '<span class="badge inactive">inactivo</span>' : ""}</td>
+    </tr>`).join("") || '<tr><td colspan="7" class="muted">Sistema vacío.</td></tr>';
+  } catch (e) {
+    $("#gv-meta").textContent = "Error: " + e.message;
+  }
+}
+
+$("#btn-gv-scan").addEventListener("click", refreshGalaxy);
+$$("#tab-galaxy input[type=number]").forEach((el) => el.addEventListener("keydown", (e) => { if (e.key === "Enter") refreshGalaxy(); }));
+
+function fillSelect(select, items, labelFn) {
+  select.innerHTML = items.map((it) => `<option value="${it.value}">${escapeHtml(labelFn(it))}</option>`).join("");
+}
+
+function populateFleetForms(data) {
+  const celestials = (data.planets || []).map((p) => ({
+    value: p.id,
+    label: `${p.type === "moon" ? "🌙" : "🪐"} ${p.name} [${p.coords.join(":")}]`,
+  }));
+  if (celestials.length) {
+    fillSelect($("#mf-origin"), celestials, (c) => c.label);
+    fillSelect($("#mb-planet"), celestials, (c) => c.label);
+  }
+  const cat = state.status || {};
+  const kind = $("#mb-kind").value;
+  const items = (kind === "ships" ? cat.ships_catalog : cat.defenses_catalog) || [];
+  fillSelect($("#mb-tech"), items, (it) => `#${it.id} ${it.name}`);
+}
+
+$("#mb-kind").addEventListener("change", () => populateFleetForms(state.planets || { planets: [] }));
+
+$("#btn-mf-send").addEventListener("click", async () => {
+  let ships = {};
+  try { ships = JSON.parse($("#mf-ships").value || "{}"); } catch { ships = null; }
+  if (!ships || !Object.keys(ships).length) {
+    toast("Introduce las naves como JSON, p. ej. {\"204\": 50}", "error");
+    return;
+  }
+  try {
+    await api("/api/action/fleet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        origin_id: parseInt($("#mf-origin").value),
+        mission: parseInt($("#mf-mission").value),
+        galaxy: parseInt($("#mf-galaxy").value),
+        system: parseInt($("#mf-system").value),
+        position: parseInt($("#mf-position").value),
+        dest_type: parseInt($("#mf-dest").value),
+        ships,
+        metal: parseInt($("#mf-metal").value) || 0,
+        crystal: parseInt($("#mf-crystal").value) || 0,
+        deuterium: parseInt($("#mf-deuterium").value) || 0,
+        speed: parseInt($("#mf-speed").value) || 10,
+        holding_time: parseInt($("#mf-holding").value) || 0,
+      }),
+    });
+    toast("🚀 Flota enviada", "success");
+    refreshFleets();
+  } catch (e) { toast("Error: " + e.message, "error"); }
+});
+
+$("#btn-mb-build").addEventListener("click", async () => {
+  const tech = $("#mb-tech").value;
+  if (!tech) return;
+  try {
+    await api("/api/action/build", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        planet_id: parseInt($("#mb-planet").value),
+        tech_id: parseInt(tech),
+        amount: parseInt($("#mb-amount").value) || 1,
+      }),
+    });
+    toast("🏭 Pedido enviado a la cola", "success");
+  } catch (e) { toast("Error: " + e.message, "error"); }
+});
 
 $("#btn-scan").addEventListener("click", async () => {
   const galaxy = parseInt($("#scan-galaxy").value);

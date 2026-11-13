@@ -17,7 +17,7 @@ Inspirado en proyectos como [ogame.ninja](https://www.ogame.ninja), [ogame-tbot/
   | Investigación | Cola única con orden de prioridad y niveles máximos |
   | Hangar y defensas | Cuotas de naves y defensas por planeta, construcción por lotes |
   | Farmer | Escaneo rotativo de galaxias → espionaje de inactivos → informes → ataques con cargas calculadas |
-  | Expediciones | Envío periódico con plantilla de flota y tiempo de retención |
+  | Expediciones | Envío periódico con plantilla de flota, tiempo de retención y rango de sistemas aleatorio (p. ej. del 100 al 130) o sistema fijo |
   | Auto-colonización | Modo automático: escanea la galaxia buscando posiciones libres (prefiere las de más campos: 7-9) y coloniza solo mientras tenga naves y huecos de flota; o coordenadas fijas si lo prefieres |
   | Transportes | Equilibra excedentes de recursos hacia el planeta principal, desde planetas y también desde lunas (`include_moons`) |
   | Recolección | Envía recicladores a los campos de escombros detectados por el mapeo galáctico, con cooldown por coordenadas para no repetir |
@@ -25,6 +25,7 @@ Inspirado en proyectos como [ogame.ninja](https://www.ogame.ninja), [ogame-tbot/
   | Mapeo galáctico | Escanea el universo en segundo plano (poco a poco, sin saltar el rate-limit) y guarda cada posición: jugador, rank, luna, escombros, inactivo y actividad |
   | Caza | Apunta jugadores por nick y re-escanea sus sistemas periódicamente para registrar cuándo se conectan (actividad de la vista de galaxia) y descubrir sus horarios |
 - **Notificaciones Telegram**: ataques, fleet-save, errores y eventos importantes en tu móvil.
+- **Apagado programado**: franja horaria en la que el bot no hace nada (config `schedule`), útil para simular descansos.
 - **Panel web en tiempo real** (SSE): tarjetas de recursos totales, gráfico de evolución, switches de módulos, alertas, imperio con colas y almacenes, flotas en vuelo, objetivos, escaneo manual de sistemas, configuración editable y registros filtrables.
 - **Modo demo**: universo simulado con 3 planetas + 1 luna, galaxia, espionaje, botín, escombros recolectables y ataques entrantes.
 - **Login real** vía lobby de Gameforge (token Bearer, relogin automático, throttling aleatorio).
