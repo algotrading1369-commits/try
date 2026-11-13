@@ -188,6 +188,7 @@ class BotEngine:
             "ticks": 0,
             "account": None,
             "demo": False,
+            "session_error": None,
         }
         self.config = {}
         self.client = None
@@ -330,6 +331,11 @@ class BotEngine:
             self._log("warning", "engine", f"No se pudo leer el cuadro de eventos: {exc}")
             self._handle_client_error()
             return
+        if self.state.get("session_error"):
+            with self.state_lock:
+                self.state["session_error"] = None
+            self._session_alerted = False
+            self._log("info", "engine", "Sesión recuperada, el bot vuelve a operar con normalidad")
         now = time.time()
         if box["hostile"] > 0:
             fleetsave = self.modules.get("fleetsave")
@@ -410,8 +416,21 @@ class BotEngine:
             if self.client and not self.client.is_logged_in():
                 self._log("warning", "engine", "Sesión expirada, relogueando")
                 self.client.relogin()
+                with self.state_lock:
+                    self.state["session_error"] = None
+                self._session_alerted = False
         except Exception as exc:
-            self._log("error", "engine", f"Relogin falló: {exc}")
+            with self.state_lock:
+                self.state["session_error"] = str(exc)
+            if not getattr(self, "_session_alerted", False):
+                self._session_alerted = True
+                self._log(
+                    "alert",
+                    "engine",
+                    f"⚠️ Sesión caducada: {exc}. El bot reintenta solo; si no se recupera, renueva la cookie en la pestaña Cuenta.",
+                )
+            else:
+                self._log("error", "engine", f"Relogin falló: {exc}")
 
     def snapshot(self):
         with self.state_lock:

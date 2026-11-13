@@ -98,6 +98,7 @@ function renderStatus() {
   pill.className = `pill ${pillState}`;
   pill.textContent = s.running ? (s.paused ? "⏸ Pausado" : "● En marcha") : "○ Detenido";
   $("#sleep-pill").classList.toggle("hidden", !s.sleeping);
+  $("#session-pill").classList.toggle("hidden", !s.session_error);
   $("#btn-pause").disabled = !s.running;
   $("#btn-start").disabled = s.running;
   $("#account-line").textContent = s.has_account
@@ -113,6 +114,7 @@ function renderStatus() {
   if (box.hostile > 0) items.push(`<div class="alert danger">⚠️ ¡Ataque hostil detectado! (${box.hostile} flotas)</div>`);
   if (s.sleeping) items.push('<div class="alert night">🌙 Modo noche activo: solo se vigilan ataques</div>');
   if (s.powered_off) items.push('<div class="alert night">⏻ Apagado programado activo: el bot no hace nada en esta franja horaria</div>');
+  if (s.session_error) items.push(`<div class="alert danger">⚠️ <b>Sesión caducada</b>: renueva la cookie en la pestaña 👤 Cuenta. El bot sigue reintentando solo. (${escapeHtml(s.session_error)})</div>`);
   if (s.last_results && s.last_results.fleetsave && Date.now() / 1000 - s.last_results.fleetsave.ts < 600)
     items.push(`<div class="alert danger">🚨 Fleet-save ejecutado: ${escapeHtml(s.last_results.fleetsave.detail)}</div>`);
   if (!items.length) items.push('<div class="alert ok">✓ Sin amenazas. Todo en orden.</div>');

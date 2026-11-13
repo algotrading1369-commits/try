@@ -91,8 +91,12 @@ class OGameClient:
 
     def login(self):
         if self.game_cookies:
-            self._enter_game_direct()
-            return
+            try:
+                self._enter_game_direct()
+                return
+            except LoginError:
+                if not self.session_token:
+                    raise
         self.session.get(LOBBY + "/")
         if self.session_token:
             token = self.session_token.strip().strip('"').strip("'")
@@ -327,7 +331,8 @@ class OGameClient:
         except Exception:
             pass
         self.session = requests.Session()
-        self.user_agent = random_user_agent()
+        if not self.user_agent:
+            self.user_agent = random_user_agent()
         self.session.headers.update({"User-Agent": self.user_agent})
         self.token = None
         self.login()
