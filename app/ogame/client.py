@@ -91,7 +91,10 @@ class OGameClient:
     def login(self):
         self.session.get(LOBBY + "/")
         if self.session_token:
-            self.token = self.session_token
+            token = self.session_token.strip().strip('"').strip("'")
+            if token.lower().startswith("gf-token-production="):
+                token = token.split("=", 1)[1].strip().strip('"').strip("'")
+            self.token = token
             self.session.headers.update({"authorization": f"Bearer {self.token}"})
             check = self.session.get(LOBBY + "/api/users/me", timeout=30)
             if check.status_code == 401:
@@ -179,16 +182,18 @@ class OGameClient:
             raise LoginError(f"La cuenta no tiene personaje en {self.universe} ({self.language})")
 
     def _enter_game(self):
-        link = self.session.get(
+        link = self.session.post(
             LOBBY + "/api/users/me/loginLink",
-            params={
+            json={
                 "id": self.server_id,
-                "server[language]": self.language,
-                "server[number]": self.server_number,
+                "server": {"language": self.language, "number": self.server_number},
                 "clickedButton": "account_list",
+                "blackbox": generate_blackbox(self.session, self.user_agent),
             },
             timeout=30,
         ).json()
+        if not isinstance(link, dict) or "url" not in link:
+            raise LoginError(f"El lobby no devolvió enlace de entrada: {str(link)[:200]}")
         self.index_php = f"https://s{self.server_number}-{self.language}.ogame.gameforge.com/game/index.php?"
         self._get(link["url"])
         page = self._get(self.index_php + "page=ingame").text

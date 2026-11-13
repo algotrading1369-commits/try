@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import queue
 import threading
@@ -201,7 +202,19 @@ def status():
 def save_account(payload: AccountIn):
     if engine.state["running"]:
         engine.stop()
-    db.save_account(payload.universe, payload.language, payload.username, payload.password, payload.demo, payload.session_token)
+    token = payload.session_token.strip().strip('"').strip("'")
+    if token.lower().startswith("gf-token-production="):
+        token = token.split("=", 1)[1].strip().strip('"').strip("'")
+    if token and not payload.demo:
+        import requests as rq
+        check = rq.get(
+            "https://lobby.ogame.gameforge.com/api/users/me",
+            headers={"Authorization": f"Bearer {token}", "User-Agent": "Mozilla/5.0"},
+            timeout=20,
+        )
+        if check.status_code != 200:
+            raise HTTPException(400, "La cookie no es válida o ha caducado: entra en lobby.ogame.gameforge.com, asegúrate de estar dentro, y cópiala de nuevo")
+    db.save_account(payload.universe, payload.language, payload.username, payload.password, payload.demo, token)
     bus.publish("log", level="info", module="web", message="Cuenta guardada")
     return {"ok": True}
 
@@ -228,6 +241,7 @@ def bot_start():
     except RuntimeError as exc:
         raise HTTPException(400, str(exc))
     except Exception as exc:
+        logging.getLogger("uvicorn.error").exception("Error al iniciar el bot")
         raise HTTPException(500, f"No se pudo iniciar: {exc}")
     return {"ok": True}
 
