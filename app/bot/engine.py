@@ -268,6 +268,7 @@ class BotEngine:
             account["language"],
             account["username"],
             account["password"],
+            session_token=(account["session_token"] if "session_token" in account.keys() else None) or None,
         )
         client.login()
         return client

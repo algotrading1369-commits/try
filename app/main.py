@@ -83,8 +83,9 @@ class AccountIn(BaseModel):
     universe: str
     language: str = "es"
     username: str
-    password: str
+    password: str = ""
     demo: bool = False
+    session_token: str = ""
 
 
 class ConfigIn(BaseModel):
@@ -200,7 +201,7 @@ def status():
 def save_account(payload: AccountIn):
     if engine.state["running"]:
         engine.stop()
-    db.save_account(payload.universe, payload.language, payload.username, payload.password, payload.demo)
+    db.save_account(payload.universe, payload.language, payload.username, payload.password, payload.demo, payload.session_token)
     bus.publish("log", level="info", module="web", message="Cuenta guardada")
     return {"ok": True}
 
@@ -210,11 +211,13 @@ def get_account():
     account = db.get_account()
     if account is None:
         return {"universe": "", "language": "es", "username": "", "demo": True}
+    keys = account.keys()
     return {
         "universe": account["universe"],
         "language": account["language"],
         "username": account["username"],
         "demo": bool(account["demo"]),
+        "session_token": account["session_token"] if "session_token" in keys else "",
     }
 
 

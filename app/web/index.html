@@ -253,7 +253,16 @@
             </select>
           </label>
           <label>Usuario / email <input name="username" required></label>
-          <label>Contraseña <input name="password" type="password" required></label>
+          <label>Contraseña <input name="password" type="password"></label>
+          <details class="muted small">
+            <summary>¿Login fallido? Prueba con una cookie de sesión (más fiable)</summary>
+            <p>1. Entra en <strong>lobby.ogame.gameforge.com</strong> con tu cuenta y deja la sesión abierta.<br>
+            2. Pulsa <strong>F12</strong> → pestaña <strong>Console</strong>.<br>
+            3. Pega esto y pulsa Enter:<br>
+            <code>document.cookie.split(';').forEach(x => {if (x.includes('production')) console.log(x)})</code><br>
+            4. Copia el valor largo que aparece y pégalo aquí.</p>
+            <label>Cookie gf-token-production <input name="session_token" placeholder="opcional, alternativa a la contraseña"></label>
+          </details>
           <label class="checkbox"><input type="checkbox" name="demo"> Modo demo (universo simulado, sin cuenta real)</label>
           <button type="submit" class="btn primary">Guardar cuenta</button>
           <p class="muted small">El bot se conecta como el juego: login vía lobby de Gameforge. Si Gameforge pide captcha, haz un login manual en el navegador primero. Usar bots viola las reglas de OGame y puede costarte la cuenta.</p>

@@ -114,6 +114,7 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_snapshots_ts ON snapshots(ts);
                 """
             )
+            self._migrate_schema(conn)
 
     def execute(self, sql, params=()):
         with self.lock, self._connect() as conn:
@@ -127,13 +128,18 @@ class Database:
         rows = self.query("SELECT * FROM accounts WHERE active = 1 ORDER BY id LIMIT 1")
         return rows[0] if rows else None
 
-    def save_account(self, universe, language, username, password, demo):
+    def save_account(self, universe, language, username, password, demo, session_token=""):
         with self.lock, self._connect() as conn:
             conn.execute("UPDATE accounts SET active = 0")
             conn.execute(
-                "INSERT INTO accounts (universe, language, username, password, demo, active, created_at) VALUES (?,?,?,?,?,1,?)",
-                (universe, language, username, password, 1 if demo else 0, time.time()),
+                "INSERT INTO accounts (universe, language, username, password, demo, session_token, active, created_at) VALUES (?,?,?,?,?,?,1,?)",
+                (universe, language, username, password, 1 if demo else 0, session_token or "", time.time()),
             )
+
+    def _migrate_schema(self, conn):
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(accounts)")}
+        if "session_token" not in cols:
+            conn.execute("ALTER TABLE accounts ADD COLUMN session_token TEXT NOT NULL DEFAULT ''")
 
     def get_setting(self, key, default=None):
         rows = self.query("SELECT value FROM settings WHERE key = ?", (key,))

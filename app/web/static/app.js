@@ -469,6 +469,7 @@ async function refreshAccount() {
   form.language.value = acc.language || "es";
   await loadUniverseOptions(form.language.value, acc.universe);
   form.username.value = acc.username;
+  form.session_token.value = acc.session_token || "";
   form.demo.checked = !!acc.demo;
   const notify = await api("/api/notify");
   const nf = $("#notify-form");
@@ -514,6 +515,10 @@ $("#account-form").language.addEventListener("change", (ev) => {
 $("#account-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const form = ev.target;
+  if (!form.password.value && !form.session_token.value && !form.demo.checked) {
+    toast("Necesitas la contraseña o una cookie de sesión (o activa el modo demo)", "error");
+    return;
+  }
   try {
     await api("/api/account", {
       method: "POST",
@@ -524,6 +529,7 @@ $("#account-form").addEventListener("submit", async (ev) => {
         username: form.username.value,
         password: form.password.value,
         demo: form.demo.checked,
+        session_token: form.session_token.value.trim(),
       }),
     });
     toast("Cuenta guardada. Ya puedes iniciar el bot.", "success");

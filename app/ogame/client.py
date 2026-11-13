@@ -10,7 +10,7 @@ from . import constants as c
 from .blackbox import generate_blackbox, random_user_agent
 
 LOBBY = "https://lobby.ogame.gameforge.com"
-GF_AUTH = "https://spark.gameforge.com/api/v2/authProviders/mauth/sessions"
+GF_AUTH = "https://spark-web.gameforge.com/api/v2/authProviders/mauth/sessions"
 
 PLATFORM_GAME_ID = "1dfd8e7e-6e1a-4eb1-8c64-03c3b62efd2f"
 GAME_ENVIRONMENT_ID = "0a31d605-ffaf-43e7-aa02-d06df7116fc8"
@@ -50,11 +50,12 @@ def _to_int(text):
 
 
 class OGameClient:
-    def __init__(self, universe, language, username, password, user_agent=None):
+    def __init__(self, universe, language, username, password, user_agent=None, session_token=None):
         self.universe = universe
         self.language = language
         self.username = username
         self.password = password
+        self.session_token = session_token
         self.user_agent = user_agent or random_user_agent()
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": self.user_agent})
@@ -89,6 +90,17 @@ class OGameClient:
 
     def login(self):
         self.session.get(LOBBY + "/")
+        if self.session_token:
+            self.token = self.session_token
+            self.session.headers.update({"authorization": f"Bearer {self.token}"})
+            check = self.session.get(LOBBY + "/api/users/me", timeout=30)
+            if check.status_code == 401:
+                raise LoginError("La cookie de sesión ha caducado: entra de nuevo en el lobby y copia una nueva")
+            if check.status_code != 200:
+                raise LoginError(f"La cookie de sesión no es válida ({check.status_code})")
+            self._resolve_server()
+            self._enter_game()
+            return
         payload = {
             "identity": self.username,
             "password": self.password,
@@ -98,7 +110,16 @@ class OGameClient:
             "gameEnvironmentId": GAME_ENVIRONMENT_ID,
             "blackbox": generate_blackbox(self.session, self.user_agent),
         }
-        resp = self.session.post(GF_AUTH, json=payload, timeout=30)
+        resp = self.session.post(
+            GF_AUTH,
+            json=payload,
+            timeout=30,
+            headers={
+                "Origin": "https://lobby.ogame.gameforge.com",
+                "Referer": "https://lobby.ogame.gameforge.com/",
+                "TNT-Installation-Id": "",
+            },
+        )
         if resp.status_code == 201:
             data = resp.json()
             self.token = data.get("token")
