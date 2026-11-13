@@ -44,6 +44,7 @@ DEFAULT_CONFIG = {
         "enabled": True,
         "interval": 120,
         "smart": True,
+        "facilities": False,
         "order": [1, 2, 3, 4, 22, 23, 24, 14, 21, 31, 15, 12, 36],
         "mine_balance": {"metal": 0, "crystal": -5, "deuterium": -3},
         "roi_ratio": [2.5, 1.5, 1],
@@ -392,8 +393,13 @@ class BotEngine:
             "INSERT INTO module_runs (module, started, finished, status, detail) VALUES (?,?,?,?,?)",
             (module.name, started, time.time(), status, detail),
         )
-        jitter = random.uniform(0.85, 1.25)
-        self.next_runs[module.name] = time.time() + module.interval() * jitter
+        delay = getattr(module, "next_delay", None)
+        module.next_delay = None
+        if delay:
+            self.next_runs[module.name] = time.time() + max(15, delay)
+        else:
+            jitter = random.uniform(0.85, 1.25)
+            self.next_runs[module.name] = time.time() + module.interval() * jitter
         with self.state_lock:
             self.state["last_results"][module.name] = {
                 "status": status,

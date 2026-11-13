@@ -484,6 +484,82 @@ def history(since: float = 0):
     return {"history": db.history(since)}
 
 
+@app.get("/api/expeditions")
+def expeditions():
+    rows = db.expeditions(limit=1000)
+    now = time.time()
+    week = now - 7 * 86400
+    today_start = now - (now % 86400)
+    ratio = {"metal": 2.5, "crystal": 1.5, "deuterium": 1.0}
+    good = ("resources", "darkmatter", "ships", "item", "battle")
+
+    def agg(items):
+        totals = {"metal": 0.0, "crystal": 0.0, "deuterium": 0.0, "darkmatter": 0.0, "ships": 0, "items": 0}
+        success = 0
+        for r in items:
+            totals["metal"] += r.get("metal", 0) or 0
+            totals["crystal"] += r.get("crystal", 0) or 0
+            totals["deuterium"] += r.get("deuterium", 0) or 0
+            totals["darkmatter"] += r.get("darkmatter", 0) or 0
+            totals["ships"] += r.get("ships_count", 0) or 0
+            if r.get("item"):
+                totals["items"] += 1
+            if r.get("outcome") in good:
+                success += 1
+        return totals, success
+
+    week_rows = [r for r in rows if r["ts"] >= week]
+    today_rows = [r for r in rows if r["ts"] >= today_start]
+    totals7, success7 = agg(week_rows)
+    totals_today, success_today = agg(today_rows)
+    ok_week = [r for r in week_rows if r["outcome"] in good]
+    avg = {}
+    n = max(len(ok_week), 1)
+    for key in ("metal", "crystal", "deuterium", "darkmatter"):
+        avg[key] = totals7[key] / n
+    systems = {}
+    for r in week_rows:
+        key = f"{r['galaxy']}:{r['system']}"
+        st = systems.setdefault(key, {"sent": 0, "success": 0, "value": 0.0})
+        st["sent"] += 1
+        if r["outcome"] in good:
+            st["success"] += 1
+        st["value"] += (r.get("metal", 0) or 0) * ratio["metal"] + (r.get("crystal", 0) or 0) * ratio["crystal"] + (r.get("deuterium", 0) or 0) * ratio["deuterium"] + (r.get("darkmatter", 0) or 0) * 10
+    system_rows = [
+        {
+            "system": k,
+            "sent": v["sent"],
+            "success_rate": round(100.0 * v["success"] / max(v["sent"], 1), 1),
+            "avg_value": int(v["value"] / max(v["sent"], 1)),
+        }
+        for k, v in sorted(systems.items(), key=lambda kv: -kv[1]["value"])
+    ]
+    recent = [
+        {
+            "ts": r["ts"],
+            "coords": f"{r['galaxy']}:{r['system']}:16",
+            "outcome": r["outcome"],
+            "metal": r.get("metal", 0),
+            "crystal": r.get("crystal", 0),
+            "deuterium": r.get("deuterium", 0),
+            "darkmatter": r.get("darkmatter", 0),
+            "ships": r.get("ships", ""),
+            "item": r.get("item", ""),
+            "detail": r.get("detail", ""),
+        }
+        for r in rows[:80]
+    ]
+    return {
+        "totals7": totals7,
+        "success7": success7,
+        "sent7": len(week_rows),
+        "avg": avg,
+        "today": {"sent": len(today_rows), "success": success_today, **totals_today},
+        "systems": system_rows,
+        "recent": recent,
+    }
+
+
 @app.get("/api/summary")
 def summary():
     if engine.client is None:

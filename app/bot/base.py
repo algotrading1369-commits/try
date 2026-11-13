@@ -13,6 +13,7 @@ class Module:
 
     def __init__(self, ctx):
         self.ctx = ctx
+        self.next_delay = None
 
     @property
     def config(self):

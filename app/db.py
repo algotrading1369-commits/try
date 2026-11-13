@@ -112,6 +112,23 @@ class Database:
                     deuterium REAL NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_snapshots_ts ON snapshots(ts);
+                CREATE TABLE IF NOT EXISTS expedition_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    ext_id TEXT UNIQUE,
+                    galaxy INTEGER,
+                    system INTEGER,
+                    outcome TEXT,
+                    metal REAL DEFAULT 0,
+                    crystal REAL DEFAULT 0,
+                    deuterium REAL DEFAULT 0,
+                    darkmatter REAL DEFAULT 0,
+                    ships_count INTEGER DEFAULT 0,
+                    ships TEXT DEFAULT '',
+                    item TEXT DEFAULT '',
+                    detail TEXT DEFAULT ''
+                );
+                CREATE INDEX IF NOT EXISTS idx_expedition_ts ON expedition_log(ts);
                 """
             )
             self._migrate_schema(conn)
@@ -166,6 +183,34 @@ class Database:
     def recent_logs(self, since=0, limit=300):
         return self.query(
             "SELECT * FROM logs WHERE ts > ? ORDER BY ts DESC LIMIT ?",
+            (since, limit),
+        )
+
+    def add_expedition(self, row):
+        with self.lock, self._connect() as conn:
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO expedition_log (ts, ext_id, galaxy, system, outcome, metal, crystal, deuterium, darkmatter, ships_count, ships, item, detail) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    row.get("ts", time.time()),
+                    row.get("ext_id"),
+                    row.get("galaxy", 0),
+                    row.get("system", 0),
+                    row.get("outcome", "nothing"),
+                    row.get("metal", 0),
+                    row.get("crystal", 0),
+                    row.get("deuterium", 0),
+                    row.get("darkmatter", 0),
+                    row.get("ships_count", 0),
+                    row.get("ships", ""),
+                    row.get("item", ""),
+                    row.get("detail", ""),
+                ),
+            )
+            return cur.rowcount > 0
+
+    def expeditions(self, since=0, limit=500):
+        return self.query(
+            "SELECT * FROM expedition_log WHERE ts > ? ORDER BY ts DESC LIMIT ?",
             (since, limit),
         )
 

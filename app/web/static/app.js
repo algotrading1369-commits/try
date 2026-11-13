@@ -66,6 +66,7 @@ function tab(name) {
   if (name === "galaxy") refreshGalaxy();
   if (["build", "research", "hangar", "farmer", "hunt", "expeditions", "fleetsave", "colonies", "transports", "config"].includes(name)) refreshConfig();
   if (name === "build" || name === "research") refreshQueue();
+  if (name === "expeditions") refreshExpeditions();
   if (name === "build" || name === "research" || name === "hangar") refreshPlanets();
   if (name === "logs") refreshLogs();
   if (name === "account") refreshAccount();
@@ -189,6 +190,7 @@ const CONFIG_META = {
   buildings: { icon: "🏗️", label: "Edificios y minas", desc: "Sube las minas y edificios de tus planetas sin que toques nada.", fields: {
     interval: { label: "Comprueba cada… (segundos)", type: "num" },
     smart: { label: "Modo inteligente", type: "bool", desc: "Elige la mejora más rentable (ROI con tu ratio comercial) y respeta el equilibrio de minas, en vez de seguir el orden fijo." },
+    facilities: { label: "Construir instalaciones automáticamente", type: "bool", desc: "APAGADO por defecto: el bot solo sube minas, energía y almacenes. Actívalo si quieres que también suba laboratorio, astillero, etc. por su cuenta (mejor dejarlo manual desde la pestaña Construir)." },
     order: { label: "Orden fijo de construcción", type: "list", desc: "Solo se usa si apagas el modo inteligente. IDs separados por comas: " + Object.entries({1:1,2:1,3:1,4:1,12:1,14:1,15:1,21:1,22:1,23:1,24:1,31:1,36:1}).map(([id]) => id + "=" + TECH_NAMES[id]).join(", ") },
     roi_ratio: { label: "Ratio comercial (metal, cristal, deuterio)", type: "list", desc: "Cuánto vale cada recurso al cambiarlo. Estándar: 2.5, 1.5, 1. Se usa para calcular qué mina se paga antes." },
     mine_balance: { label: "Equilibrio de minas", type: "dict", keyNames: {metal:"Metal (+niveles sobre cristal)", crystal:"Cristal (base)", deuterium:"Deuterio (+niveles sobre cristal)"}, desc: "Diferencia de niveles entre minas. Con 0 / 0 / -3: metal y cristal al mismo nivel, deuterio 3 niveles por debajo." },
@@ -683,6 +685,62 @@ document.addEventListener("click", async (ev) => {
   } catch (e) { toast("Error: " + e.message, "error"); }
 });
 
+const EXP_OUTCOMES = {resources: "💰 Recursos", darkmatter: "✨ Materia oscura", ships: "🚠 Naves encontradas", item: "🎁 Objeto", battle: "⚔️ Combate", nothing: "🌑 Nada"};
+
+async function refreshExpeditions() {
+  try {
+    const data = await api("/api/expeditions");
+    const t = data.totals7 || {};
+    const card = (label, value) => `<div class="stat-card"><span class="stat-value">${value}</span><span class="stat-label">${label}</span></div>`;
+    $("#exp-totals").innerHTML =
+      card("⚖️ Metal (7 días)", fmt(t.metal || 0)) +
+      card("◆ Cristal (7 días)", fmt(t.crystal || 0)) +
+      card("🐎 Deuterio (7 días)", fmt(t.deuterium || 0)) +
+      card("✨ Materia oscura", fmt(t.darkmatter || 0)) +
+      card("🚠 Naves encontradas", fmt(t.ships || 0)) +
+      card("🎁 Objetos", fmt(t.items || 0));
+    const kv = (k, v) => `<span class="k">${k}</span><span>${v}</span>`;
+    const td = data.today || {};
+    $("#exp-today").innerHTML =
+      kv("Expediciones enviadas", fmt(td.sent || 0)) +
+      kv("Exitosas", fmt(td.success || 0)) +
+      kv("Metal", fmt(td.metal || 0)) +
+      kv("Cristal", fmt(td.crystal || 0)) +
+      kv("Deuterio", fmt(td.deuterium || 0)) +
+      kv("Materia oscura", fmt(td.darkmatter || 0));
+    const av = data.avg || {};
+    $("#exp-avg").innerHTML =
+      kv("Metal", fmt(av.metal || 0)) +
+      kv("Cristal", fmt(av.crystal || 0)) +
+      kv("Deuterio", fmt(av.deuterium || 0)) +
+      kv("Materia oscura", fmt(av.darkmatter || 0)) +
+      kv("Tasa de éxito (7 días)", `${data.sent7 ? Math.round(100 * (data.success7 || 0) / data.sent7) : 0}% de ${fmt(data.sent7 || 0)}`);
+    $("#exp-systems tbody").innerHTML = (data.systems || []).map((r) => `<tr>
+      <td><b>${escapeHtml(r.system)}</b></td>
+      <td>${fmt(r.sent)}</td>
+      <td>${r.success_rate}%</td>
+      <td>${fmt(r.avg_value)}</td>
+    </tr>`).join("") || '<tr><td colspan="4" class="muted">Sin expediciones todavía. Activa el módulo Expediciones.</td></tr>';
+    const gain = (r) => {
+      const parts = [];
+      if (r.metal) parts.push(`M ${fmt(r.metal)}`);
+      if (r.crystal) parts.push(`C ${fmt(r.crystal)}`);
+      if (r.deuterium) parts.push(`D ${fmt(r.deuterium)}`);
+      if (r.darkmatter) parts.push(`DM ${fmt(r.darkmatter)}`);
+      if (r.ships) parts.push(escapeHtml(r.ships));
+      if (r.item) parts.push("🎁 " + escapeHtml(r.item));
+      return parts.join(" · ") || '<span class="muted">—</span>';
+    };
+    $("#exp-recent tbody").innerHTML = (data.recent || []).map((r) => `<tr>
+      <td>${fmtDateTime(r.ts)}</td>
+      <td>${escapeHtml(r.coords)}</td>
+      <td>${EXP_OUTCOMES[r.outcome] || escapeHtml(r.outcome)}</td>
+      <td>${gain(r)}</td>
+    </tr>`).join("") || '<tr><td colspan="4" class="muted">Sin resultados todavía.</td></tr>';
+  } catch (e) { console.error(e); }
+}
+
+
 $("#btn-scan").addEventListener("click", async () => {
   const galaxy = parseInt($("#scan-galaxy").value);
   const system = parseInt($("#scan-system").value);
@@ -947,4 +1005,5 @@ setInterval(() => {
   if (document.querySelector("#tab-fleet.active")) refreshFleets();
   if (document.querySelector("#tab-planets.active")) refreshPlanets();
   if (document.querySelector("#tab-farmer.active")) refreshTargets();
+  if (document.querySelector("#tab-expeditions.active")) refreshExpeditions();
 }, 10000);

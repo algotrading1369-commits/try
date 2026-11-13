@@ -1,5 +1,8 @@
+import random
+
 from ..base import Module, planets_only, queue_busy
 from ...ogame import constants as c
+from ...ogame.client import OGameError
 
 
 class ResearchModule(Module):
@@ -19,7 +22,12 @@ class ResearchModule(Module):
             return "sin planetas"
         lab_planet = planets[0]
         data = self.ctx.client.research(lab_planet["id"])
-        if queue_busy(data.get("_queue", [])):
+        queue = data.get("_queue", [])
+        if queue_busy(queue):
+            left = queue[0].get("time_left") if isinstance(queue[0], dict) else None
+            if isinstance(left, (int, float)) and left > 0:
+                self.next_delay = left + random.uniform(30, 90)
+                return f"cola ocupada ({int(left)}s restantes)"
             return "cola ocupada"
         res = self.ctx.client.resources(lab_planet["id"])
         for tech_id in order:
@@ -34,7 +42,13 @@ class ResearchModule(Module):
             metal, crystal, deuterium = c.building_cost(tech_id, current + 1)
             if res["metal"] < metal or res["crystal"] < crystal or res["deuterium"] < deuterium:
                 continue
-            if self.ctx.client.start_research(tech_id, lab_planet["id"]):
+            try:
+                ok = self.ctx.client.start_research(tech_id, lab_planet["id"])
+            except OGameError as exc:
+                self.ctx.log("warning", f"Investigación rechazada temporalmente: {exc}")
+                self.next_delay = 120
+                return "cola ocupada"
+            if ok:
                 self.ctx.log("info", f"Investigando {info['name']} → {current + 1}")
                 return f"{info['name']} → {current + 1}"
         return "nada accesible"

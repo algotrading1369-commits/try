@@ -278,6 +278,27 @@
   </section>
 
   <section id="tab-expeditions" class="tab-page">
+    <div class="stat-row" id="exp-totals"></div>
+    <div class="grid">
+      <div class="card"><h3>📅 Hoy</h3><div id="exp-today" class="kv"></div></div>
+      <div class="card"><h3>📊 Media por expedición exitosa (7 días)</h3><div id="exp-avg" class="kv"></div></div>
+    </div>
+    <div class="card wide"><h3>🧭 Rendimiento por sistema (7 días)</h3>
+      <div class="table-wrap">
+      <table id="exp-systems">
+        <thead><tr><th>Sistema</th><th>Expediciones</th><th>Tasa de éxito</th><th>Valor medio</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
+    <div class="card wide"><h3>📜 Últimas expediciones</h3>
+      <div class="table-wrap">
+      <table id="exp-recent">
+        <thead><tr><th>Fecha</th><th>Sistema</th><th>Resultado</th><th>Ganancia</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
     <div class="cfg-mount" data-modules="expedition"></div>
     <button class="btn primary btn-save-cfg">💾 Guardar expediciones</button>
   </section>

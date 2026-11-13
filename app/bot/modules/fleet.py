@@ -12,7 +12,22 @@ class ExpeditionModule(Module):
     default_enabled = False
     priority = 50
 
+    def _collect(self):
+        try:
+            msgs = self.ctx.client.expedition_messages()
+        except Exception:
+            return
+        new = 0
+        for m in msgs:
+            if not isinstance(m, dict):
+                continue
+            if self.ctx.db.add_expedition(m):
+                new += 1
+        if new:
+            self.ctx.log("info", f"{new} resultados de expedición registrados")
+
     def run(self):
+        self._collect()
         cfg = self.config
         origin_id = int(cfg.get("origin_id", 0))
         planets = planets_only(self.ctx)

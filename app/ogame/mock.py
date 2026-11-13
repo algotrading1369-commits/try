@@ -114,6 +114,8 @@ class MockClient:
         self._fleet_seq = 1
         self.galaxy_cache = {}
         self.spy_report_store = []
+        self.expedition_store = []
+        self._exp_seq = 1
         self.attack_alert_until = 0
         self.attack_tick = rnd.randint(60, 120)
 
@@ -211,7 +213,9 @@ class MockClient:
 
     def research(self, celestial_id=None):
         with self.lock:
-            return {**{k: {"id": k, "name": v["name"], "level": self.research_levels.get(k, 0), "status": "on"} for k, v in c.RESEARCHES.items()}, "_queue": list(self.research_queue)}
+            return {**{k: {"id": k, "name": v["name"], "level": self.research_levels.get(k, 0), "status": "on"} for k, v in c.RESEARCHES.items()}, "_queue": [
+                {"tech": q["tech"], "time_left": max(0, int(q["end"] - self._now()))} for q in self.research_queue
+            ]}
 
     def start_research(self, tech_id, celestial_id):
         with self.lock:
@@ -266,6 +270,7 @@ class MockClient:
     def event_box(self):
         with self.lock:
             self._tick_queues()
+            self._process_fleets()
             self._produce()
             self._maybe_attack()
             hostile = 1 if self._now() < self.attack_alert_until else 0
@@ -276,36 +281,43 @@ class MockClient:
         with self.lock:
             self._tick_queues()
             active = len([f for f in self.fleet_list if not f.return_flight])
+            exp_used = len([f for f in self.fleet_list if f.mission == c.MISSION_EXPEDITION and not f.return_flight])
             return {
                 "fleet": {"used": active, "total": 9},
-                "expedition": {"used": 0, "total": 3},
+                "expedition": {"used": exp_used, "total": 3},
             }
+
+    def _process_fleets(self):
+        now = self._now()
+        for fleet in list(self.fleet_list):
+            if fleet.arrival <= now and not fleet.return_flight:
+                if fleet.mission == c.MISSION_TRANSPORT:
+                    dest_id = self._celestial_by_coords(fleet.destination)
+                    if dest_id:
+                        res = self.res_store[dest_id]
+                        res["metal"] += fleet.cargo.get("metal", 0)
+                        res["crystal"] += fleet.cargo.get("crystal", 0)
+                        res["deuterium"] += fleet.cargo.get("deuterium", 0)
+                    fleet.cargo = {}
+                if fleet.mission == c.MISSION_EXPEDITION:
+                    self.expedition_store.insert(0, self._gen_expedition(fleet))
+                    self.expedition_store = self.expedition_store[:60]
+                fleet.return_flight = True
+                fleet.arrival = now + random.randint(60, 180)
+            elif fleet.return_flight and fleet.arrival <= now:
+                origin_res = self.res_store.get(fleet.origin_id)
+                if origin_res is not None and fleet.cargo:
+                    for key in ("metal", "crystal", "deuterium"):
+                        origin_res[key] += fleet.cargo.get(key, 0)
+                ships_back = self.ship_store.setdefault(fleet.origin_id, {})
+                for sid, amount in fleet.ship_store.items():
+                    ships_back[sid] = ships_back.get(sid, 0) + amount
+                self.fleet_list.remove(fleet)
 
     def fleets(self):
         with self.lock:
             self._tick_queues()
-            now = self._now()
-            for fleet in list(self.fleet_list):
-                if fleet.arrival <= now and not fleet.return_flight:
-                    if fleet.mission == c.MISSION_TRANSPORT:
-                        dest_id = self._celestial_by_coords(fleet.destination)
-                        if dest_id:
-                            res = self.res_store[dest_id]
-                            res["metal"] += fleet.cargo.get("metal", 0)
-                            res["crystal"] += fleet.cargo.get("crystal", 0)
-                            res["deuterium"] += fleet.cargo.get("deuterium", 0)
-                        fleet.cargo = {}
-                    fleet.return_flight = True
-                    fleet.arrival = now + random.randint(60, 180)
-                elif fleet.return_flight and fleet.arrival <= now:
-                    origin_res = self.res_store.get(fleet.origin_id)
-                    if origin_res is not None and fleet.cargo:
-                        for key in ("metal", "crystal", "deuterium"):
-                            origin_res[key] += fleet.cargo.get(key, 0)
-                    ships_back = self.ship_store.setdefault(fleet.origin_id, {})
-                    for sid, amount in fleet.ship_store.items():
-                        ships_back[sid] = ships_back.get(sid, 0) + amount
-                    self.fleet_list.remove(fleet)
+            self._process_fleets()
             return [
                 {
                     "id": f.id,
@@ -420,6 +432,57 @@ class MockClient:
                     fleet.arrival = self._now() + random.randint(30, 120)
                     return True
             return False
+
+    def _gen_expedition(self, fleet):
+        self._exp_seq += 1
+        roll = self._rnd.random()
+        base = {
+            "ext_id": f"demo-{self._exp_seq}",
+            "ts": self._now(),
+            "galaxy": fleet.destination[0],
+            "system": fleet.destination[1],
+            "metal": 0,
+            "crystal": 0,
+            "deuterium": 0,
+            "darkmatter": 0,
+            "ships_count": 0,
+            "ships": "",
+            "item": "",
+            "detail": "",
+        }
+        if roll < 0.45:
+            base["outcome"] = "resources"
+            total = self._rnd.randint(80_000, 900_000)
+            base["metal"] = int(total * self._rnd.uniform(0.3, 0.7))
+            base["crystal"] = int(total * self._rnd.uniform(0.15, 0.35))
+            base["deuterium"] = int(total * self._rnd.uniform(0.05, 0.2))
+            base["detail"] = "La flota vuelve cargada de recursos"
+        elif roll < 0.65:
+            base["outcome"] = "darkmatter"
+            base["darkmatter"] = self._rnd.randint(150, 900)
+            base["detail"] = "Encontraste materia oscura"
+        elif roll < 0.78:
+            base["outcome"] = "ships"
+            sid = self._rnd.choice([202, 203, 204])
+            count = self._rnd.randint(2, 8)
+            base["ships_count"] = count
+            base["ships"] = f"{count}x {c.SHIPS[sid]['name']}"
+            base["detail"] = "Encontraste naves perdidas"
+        elif roll < 0.88:
+            base["outcome"] = "nothing"
+            base["detail"] = "No encontraste nada"
+        elif roll < 0.94:
+            base["outcome"] = "battle"
+            base["detail"] = "Combate contra piratas espaciales"
+        else:
+            base["outcome"] = "item"
+            base["item"] = self._rnd.choice(["Módulo de hiperespacio", "Núcleo de plasma", "Fragmento de cristal"])
+            base["detail"] = f"Objeto encontrado: {base['item']}"
+        return base
+
+    def expedition_messages(self, max_pages=2):
+        with self.lock:
+            return [dict(r) for r in self.expedition_store]
 
     def _generate_spy_report(self, coords):
         self.spy_report_store = [r for r in self.spy_report_store if r["coords"] != coords]

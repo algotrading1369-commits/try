@@ -71,10 +71,10 @@ class OGameClient:
         self.fleet_speed = 1
         self.last_request = 0.0
 
-    def _throttle(self, min_gap=0.8):
+    def _throttle(self, min_gap=1.3):
         gap = time.time() - self.last_request
         if gap < min_gap:
-            time.sleep(min_gap - gap + random.uniform(0.05, 0.4))
+            time.sleep(min_gap - gap + random.uniform(0.05, 0.6))
         self.last_request = time.time()
 
     def _get(self, url, **kwargs):
@@ -427,6 +427,17 @@ class OGameClient:
             }
         return result
 
+    @staticmethod
+    def _timer_seconds(text):
+        if not text:
+            return None
+        total = 0
+        found = False
+        for value, unit in re.findall(r"(\d+)\s*([dhms])", str(text).lower()):
+            found = True
+            total += int(value) * {"d": 86400, "h": 3600, "m": 60, "s": 1}[unit]
+        return total if found else None
+
     def _queue_from_soup(self, soup):
         queue = []
         for item in soup.select(".construction .queue li, #construction li"):
@@ -434,10 +445,11 @@ class OGameClient:
             if "first" not in cls and "item" not in cls:
                 continue
             timer = item.select_one(".timer")
+            left = self._timer_seconds(timer.text.strip()) if timer is not None else None
             queue.append(
                 {
                     "tech": item.get("data-technology"),
-                    "time_left": timer.text.strip() if timer is not None else None,
+                    "time_left": left,
                 }
             )
         return queue
@@ -716,6 +728,70 @@ class OGameClient:
             if len(soup.select(".msg.espionage, li.msg")) == 0:
                 break
         return reports
+
+    def expedition_messages(self, max_pages=2):
+        results = []
+        for page_num in range(1, max_pages + 1):
+            try:
+                soup = self._page(f"page=messages&tabid=3&subTab=0&page={page_num}")
+            except Exception:
+                break
+            notes = soup.select(".msg, li.msg, .message")
+            if not notes:
+                break
+            for note in notes:
+                body = note.decode_contents()
+                coords = re.search(r"\[(\d+):(\d+):16\]", body)
+                if coords is None:
+                    continue
+                ext_id = note.get("data-msg-id") or note.get("id") or ""
+                if not ext_id:
+                    m = re.search(r"msg_id=(\w+)|messageId=(\w+)", body)
+                    ext_id = (m.group(1) or m.group(2)) if m else f"hash-{abs(hash(body[:300]))}"
+                metal = re.search(r"Metal[^0-9]{0,40}([\d.,]+)", body)
+                crystal = re.search(r"Cristal[^0-9]{0,40}([\d.,]+)", body)
+                deuterium = re.search(r"Deuterio[^0-9]{0,40}([\d.,]+)", body)
+                dark = re.search(r"ateria oscura[^0-9]{0,40}([\d.,]+)", body)
+                lower = body.lower()
+                if dark:
+                    outcome = "darkmatter"
+                elif "objeto" in lower or "item" in lower:
+                    outcome = "item"
+                elif "naves" in lower and ("encontr" in lower):
+                    outcome = "ships"
+                elif metal or crystal or deuterium:
+                    outcome = "resources"
+                elif "pirata" in lower or "alien" in lower:
+                    outcome = "battle"
+                else:
+                    outcome = "nothing"
+                ships_text = ""
+                ships_count = 0
+                if outcome == "ships":
+                    sm = re.search(r"(\d+)\s+naves?[^<>]{0,80}", body)
+                    ships_text = sm.group(0).strip()[:120] if sm else "naves encontradas"
+                    ships_count = int(sm.group(1)) if sm else 0
+                item = ""
+                if outcome == "item":
+                    im = re.search(r"(?:objeto|item)[^<>]{0,80}", body)
+                    item = im.group(0).strip()[:120] if im else "objeto encontrado"
+                results.append(
+                    {
+                        "ext_id": f"v13-{ext_id}",
+                        "galaxy": int(coords.group(1)),
+                        "system": int(coords.group(2)),
+                        "outcome": outcome,
+                        "metal": _to_int(metal.group(1)) if metal else 0,
+                        "crystal": _to_int(crystal.group(1)) if crystal else 0,
+                        "deuterium": _to_int(deuterium.group(1)) if deuterium else 0,
+                        "darkmatter": _to_int(dark.group(1)) if dark else 0,
+                        "ships_count": ships_count,
+                        "ships": ships_text,
+                        "item": item,
+                        "detail": re.sub(r"<[^>]+>", " ", body)[:200],
+                    }
+                )
+        return results
 
     def server_info(self):
         resp = self._get(f"https://s{self.server_number}-{self.language}.ogame.gameforge.com/api/serverData.xml")

@@ -1,5 +1,8 @@
+import random
+
 from ..base import Module, planets_only, queue_busy
 from ...ogame import constants as c
+from ...ogame.client import OGameError
 
 MINE_IDS = [1, 2, 3]
 RES_KEYS = {1: "metal", 2: "crystal", 3: "deuterium"}
@@ -89,7 +92,8 @@ class BuildingsModule(Module):
 
             mines = sorted(MINE_IDS, key=lambda t: -deficit(t))
             candidates.extend(t for t in mines if self._below_cap(data, t, max_levels))
-        candidates.extend(t for t in INFRA_ORDER if self._below_cap(data, t, max_levels))
+        if self.config.get("facilities"):
+            candidates.extend(t for t in INFRA_ORDER if self._below_cap(data, t, max_levels))
         seen = set()
         unique = []
         for t in candidates:
@@ -103,19 +107,36 @@ class BuildingsModule(Module):
         max_levels = self.config.get("max_levels", {})
         reserves = self.config.get("reserves", {"metal": 0, "crystal": 0, "deuterium": 0})
         built = []
-        for planet in planets_only(self.ctx):
+        busy_lefts = []
+        planets = planets_only(self.ctx)
+        for planet in planets:
             cid = planet["id"]
             data = self.ctx.client.buildings(cid)
-            if queue_busy(data.get("_queue", [])):
+            queue = data.get("_queue", [])
+            if queue_busy(queue):
+                left = queue[0].get("time_left") if isinstance(queue[0], dict) else None
+                if isinstance(left, (int, float)) and left > 0:
+                    busy_lefts.append(left)
                 continue
             res = self.ctx.client.resources(cid)
             for tech_id in self._candidates(data, res, max_levels, smart):
                 if not self._affordable(tech_id, data, res, reserves):
                     continue
                 current = self._level(data, tech_id)
-                if self.ctx.client.build(tech_id, cid):
+                try:
+                    ok = self.ctx.client.build(tech_id, cid)
+                except OGameError as exc:
+                    self.ctx.log("warning", f"{planet['name']}: construcción rechazada temporalmente ({exc})")
+                    break
+                if ok:
                     built.append(f"{planet['name']}: {c.BUILDINGS[tech_id]['name']} → {current + 1}")
                     break
         if built:
             self.ctx.log("info", " | ".join(built))
+        elif busy_lefts and len(busy_lefts) == len(planets):
+            wait = min(busy_lefts) + random.uniform(30, 90)
+            self.next_delay = wait
+            return f"colas ocupadas ({int(min(busy_lefts))}s restantes)"
+        elif not built and smart:
+            return "esperando recursos para minas (las instalaciones se construyen desde la cola manual)"
         return f"{len(built)} construcciones iniciadas"
