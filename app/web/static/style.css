@@ -256,6 +256,23 @@ th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size
   font-size: 13px;
 }
 .config-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.config-mod { margin-bottom: 14px; }
+.config-mod .module-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.config-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
+.cfg-field { display: flex; flex-direction: column; gap: 6px; }
+.cfg-field .cfg-label b { font-size: 13px; color: var(--text); }
+.cfg-field .cfg-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.cfg-field input, .cfg-field textarea {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  resize: vertical;
+}
+@media (max-width: 900px) { .config-fields { grid-template-columns: 1fr; } }
 .checkbox { display: flex; align-items: center; gap: 8px; }
 .checkbox input { width: auto; }
 .toggle { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 14px; }

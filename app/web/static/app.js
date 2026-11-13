@@ -170,24 +170,188 @@ function renderModules() {
   });
 }
 
+const SHIP_NAMES = {202:"Carguero pequeño",203:"Carguero grande",204:"Cazador ligero",205:"Cazador pesado",206:"Crucero",207:"Nave de batalla",208:"Colono",209:"Reciclador",210:"Sonda de espionaje",211:"Bombardero",213:"Destructor",214:"Estrella de la muerte",215:"Acorazado",218:"Crawler",219:"Explorador"};
+const DEF_NAMES = {401:"Lanzamisiles",402:"Láser pequeño",403:"Láser grande",404:"Cañón Gauss",405:"Cañón de iones",406:"Cañón de plasma",407:"Cúpula pequeña",408:"Cúpula grande",502:"Misil interceptor",503:"Misil interplanetario"};
+const TECH_NAMES = Object.assign({}, SHIP_NAMES, DEF_NAMES, {
+  1:"Mina de metal",2:"Mina de cristal",3:"Sintetizador de deuterio",4:"Planta solar",12:"Planta de fusión",
+  14:"Fábrica de robots",15:"Fábrica de nanites",21:"Hangar",22:"Almacén de metal",23:"Almacén de cristal",24:"Tanque de deuterio",
+  31:"Laboratorio de investigación",36:"Terraformer",
+  106:"Tecnología láser",108:"Tecnología de energía",109:"Tecnología de blindaje",110:"Tecnología de armas",111:"Tecnología de escudos",
+  113:"Propulsor de combustión",115:"Propulsor de impulso",117:"Propulsor de hiperespacio",120:"Tecnología de espionaje",
+  121:"Computación cuántica",122:"Gravitón",123:"Red de investigación intergaláctica",124:"Astrofísica"
+});
+
+const CONFIG_META = {
+  buildings: { icon: "🏗️", label: "Edificios y minas", desc: "Sube las minas y edificios de tus planetas sin que toques nada.", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    smart: { label: "Modo inteligente", type: "bool", desc: "Elige la mejora más rentable (ROI con tu ratio comercial) y respeta el equilibrio de minas, en vez de seguir el orden fijo." },
+    order: { label: "Orden fijo de construcción", type: "list", desc: "Solo se usa si apagas el modo inteligente. IDs separados por comas: " + Object.entries({1:1,2:1,3:1,4:1,12:1,14:1,15:1,21:1,22:1,23:1,24:1,31:1,36:1}).map(([id]) => id + "=" + TECH_NAMES[id]).join(", ") },
+    roi_ratio: { label: "Ratio comercial (metal, cristal, deuterio)", type: "list", desc: "Cuánto vale cada recurso al cambiarlo. Estándar: 2.5, 1.5, 1. Se usa para calcular qué mina se paga antes." },
+    mine_balance: { label: "Equilibrio de minas", type: "dict", keyNames: {metal:"Metal (+niveles sobre cristal)", crystal:"Cristal (base)", deuterium:"Deuterio (+niveles sobre cristal)"}, desc: "Diferencia de niveles entre minas. Con 0 / 0 / -3: metal y cristal al mismo nivel, deuterio 3 niveles por debajo." },
+    max_levels: { label: "Niveles máximos", type: "dict", keyNames: {metal_mine:"Mina de metal", crystal_mine:"Mina de cristal", deuterium_mine:"Sintetizador de deuterio"}, desc: "El bot no sube ninguna mina más allá de estos niveles. Deja vacío para no limitar." },
+    reserves: { label: "Reservas que nunca gasta", type: "dict", keyNames: {metal:"Metal", crystal:"Cristal", deuterium:"Deuterio"}, desc: "Antes de construir, el bot deja siempre esta cantidad en el planeta." },
+  }},
+  research: { icon: "🔬", label: "Investigaciones", desc: "Pone investigaciones en cola una tras otra siguiendo el orden que definas.", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    order: { label: "Orden de investigación", type: "list", desc: "IDs separados por comas, se investigan en este orden: " + [106,108,109,110,111,113,115,117,120,121,124,123].map(id => id + "=" + TECH_NAMES[id]).join(", ") },
+    max_levels: { label: "Niveles máximos", type: "dict", keyNames: TECH_NAMES, desc: "Escribe id: nivel para no pasar de ahí. Ejemplo: 120: 12" },
+  }},
+  shipyard: { icon: "🚢", label: "Hangar y defensas", desc: "Construye naves y defensas hasta alcanzar las cantidades que pongas aquí (cuotas).", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    ship_quotas: { label: "Naves — cuántas tener en total", type: "dict", keyNames: SHIP_NAMES, desc: "Una línea por nave: id: cantidad. Ejemplo: 202: 200" },
+    defense_quotas: { label: "Defensas — cuántas tener", type: "dict", keyNames: DEF_NAMES, desc: "Una línea por defensa: id: cantidad. Ejemplo: 401: 300" },
+    batch_size: { label: "Tamaño del lote", type: "num", desc: "Cuántas unidades pide de golpe en cada pasada del hangar." },
+  }},
+  farmer: { icon: "⚔️", label: "Farmer (atacar inactivos)", desc: "Espía jugadores inactivos cercanos y ataca a los que tienen recursos que robar.", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    origin_id: { label: "ID del planeta atacante", type: "num", desc: "Déjalo en 0 para usar tu primer planeta. El ID lo ves en la pestaña Imperio." },
+    galaxies: { label: "Galaxias donde buscar", type: "list", desc: "Ejemplo: 4, 5" },
+    systems: { label: "Rango de sistemas", type: "list", desc: "Dos números: desde, hasta. Ejemplo: 19, 40" },
+    max_rank: { label: "Puesto máximo del rival", type: "num", desc: "Solo ataca a jugadores con puesto peor (número más alto) que este. 400 = débiles." },
+    min_loot: { label: "Botín mínimo para atacar", type: "num", desc: "Si el espionaje encuentra menos recursos que esto, no ataca." },
+    probes: { label: "Sondas por espionaje", type: "num" },
+    escorts: { label: "Naves de escolta", type: "dict", keyNames: SHIP_NAMES, desc: "Naves que acompañan a los cargueros en cada ataque. Ejemplo: 204: 30" },
+    attack_cooldown: { label: "No repetir objetivo antes de… (segundos)", type: "num" },
+  }},
+  expedition: { icon: "🚀", label: "Expediciones", desc: "Envía flotas a la posición 16 de los sistemas que elijas a buscar recursos, naves o materia oscura.", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    origin_id: { label: "ID del planeta de salida", type: "num", desc: "0 = tu primer planeta." },
+    fleet: { label: "Flota de expedición", type: "dict", keyNames: SHIP_NAMES, desc: "Naves que envía en cada expedición. Ejemplo: 204: 50 grandes cantidades de cazadores + 202: 20 cargueros + 210: 1 sonda" },
+    holding_time: { label: "Horas que se queda allí", type: "num" },
+    coords: { label: "Coordenadas fijas (opcional)", type: "json", desc: "Formato [[galaxia, sistema, 16]]. Si lo dejas vacío usa el rango de abajo." },
+    galaxy: { label: "Galaxia de expediciones", type: "num", desc: "0 = la misma galaxia que el planeta de salida." },
+    system_start: { label: "Sistema inicial del rango", type: "num" },
+    system_end: { label: "Sistema final del rango", type: "num" },
+  }},
+  fleetsave: { icon: "🛡️", label: "Fleet-save automático", desc: "Si detecta ataques entrantes, manda tu flota y recursos a escondite (expedición) para que no los pillen.", fields: {
+    interval: { label: "Vigila cada… (segundos)", type: "num" },
+    mode: { label: "Modo de escondite", type: "text", desc: "expedition = manda la flota a expedición (recomendado)." },
+    origin_id: { label: "ID del planeta a vigilar", type: "num", desc: "0 = tu primer planeta." },
+    holding_time: { label: "Horas escondido", type: "num" },
+    cooldown: { label: "Espera entre fleet-saves (segundos)", type: "num" },
+  }},
+  colonize: { icon: "🪐", label: "Auto-colonización", desc: "Construye colonos y coloniza planetas nuevos en la zona que elijas. Al conseguirlos, empieza a subirles las minas.", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    origin_id: { label: "ID del planeta de salida", type: "num", desc: "0 = tu primer planeta." },
+    auto: { label: "Elegir coordenadas automáticamente", type: "bool", desc: "Busca huecos buenos dentro del rango de abajo. Si lo apagas, usa la lista de coordenadas." },
+    galaxy: { label: "Galaxia donde colonizar", type: "num" },
+    system_start: { label: "Sistema inicial", type: "num" },
+    system_end: { label: "Sistema final", type: "num" },
+    coords: { label: "Coordenadas concretas (opcional)", type: "json", desc: "Formato [[galaxia, sistema, planeta], …]. Se usan antes que el rango." },
+  }},
+  transport: { icon: "🚚", label: "Transportes al principal", desc: "Manda los recursos que sobran de cada planeta y luna a tu planeta principal.", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    main_id: { label: "ID del planeta principal (destino)", type: "num", desc: "El ID lo ves en la pestaña Imperio." },
+    threshold: { label: "Enviar cuando un planeta supere…", type: "num", desc: "Suma de recursos a partir de la cual se organiza un transporte." },
+    keep: { label: "Dejar en cada planeta", type: "num", desc: "Cantidad que el bot nunca se lleva del origen." },
+    include_moons: { label: "Incluir lunas", type: "bool" },
+  }},
+  sleep: { icon: "🌙", label: "Modo noche", desc: "Deja el juego tranquilo en esas horas (solo se mantiene el fleet-save por si hay ataques).", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    start_hour: { label: "Hora de empezar a dormir (0-23)", type: "num" },
+    end_hour: { label: "Hora de despertar (0-23)", type: "num" },
+  }},
+  mapper: { icon: "🗺️", label: "Mapeo galáctico", desc: "Escanea la galaxia poco a poco y apunta en el mapa los inactivos y campos de escombros que encuentra.", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    galaxies: { label: "Galaxias a escanear", type: "list", desc: "Ejemplo: 1, 2, 3, 4" },
+    system_start: { label: "Sistema inicial", type: "num" },
+    system_end: { label: "Sistema final", type: "num" },
+    systems_per_run: { label: "Sistemas por pasada", type: "num", desc: "Cuántos sistemas escanea cada vez (bajo = más discreto)." },
+  }},
+  hunt: { icon: "🎯", label: "Caza", desc: "Revisa las posiciones del mapa y registra cuándo está activo cada jugador: así descubres los horarios de tus objetivos.", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    rescan_per_run: { label: "Posiciones a revisar por pasada", type: "num" },
+  }},
+  harvest: { icon: "♻️", label: "Recolección de escombros", desc: "Envía recicladores a los campos de escombros que el mapeo haya encontrado.", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    origin_id: { label: "ID del planeta de salida", type: "num", desc: "0 = tu primer planeta." },
+    recyclers_max: { label: "Recicladores por envío", type: "num" },
+    cooldown: { label: "No repetir escombro antes de… (segundos)", type: "num" },
+    max_targets: { label: "Máximo de escombros por pasada", type: "num" },
+  }},
+  watch: { icon: "👁️", label: "Vigilancia", desc: "Te avisa (panel y Telegram) si un objetivo cazado se conecta o si un inactivo vuelve a estar activo.", fields: {
+    interval: { label: "Comprueba cada… (segundos)", type: "num" },
+    alert_hunted: { label: "Avisar cuando un objetivo se conecta", type: "bool" },
+    hunted_online_minutes: { label: "Considerar conectado si estuvo activo hace menos de… (minutos)", type: "num" },
+    alert_inactive_recovered: { label: "Avisar cuando un inactivo reaparece", type: "bool" },
+    repeat_cooldown: { label: "No repetir el mismo aviso antes de… (segundos)", type: "num" },
+  }},
+  schedule: { icon: "⏰", label: "Apagado programado", desc: "Apaga TODOS los módulos en esa franja horaria (ni expediciones ni fleet-save).", fields: {
+    start_hour: { label: "Hora de apagar (0-23)", type: "num" },
+    end_hour: { label: "Hora de encender (0-23)", type: "num" },
+  }},
+};
+
+function cfgFieldValue(type, value, keyNames) {
+  if (type === "bool") return !!value;
+  if (type === "num") return Number(value) || 0;
+  if (type === "list") return Array.isArray(value) ? value.join(", ") : String(value || "");
+  if (type === "dict") {
+    const obj = value && typeof value === "object" ? value : {};
+    return Object.entries(obj).map(([k, v]) => `${k}: ${v}`).join("\n");
+  }
+  if (type === "json") return Array.isArray(value) && value.length ? JSON.stringify(value) : "";
+  return String(value ?? "");
+}
+
+function cfgParseValue(type, raw) {
+  const text = (raw || "").trim();
+  if (type === "bool") return true;
+  if (type === "num") { const n = Number(text); return isNaN(n) ? 0 : n; }
+  if (type === "list") return text.split(",").map(x => x.trim()).filter(x => x !== "").map(x => { const n = Number(x); return isNaN(n) ? x : n; });
+  if (type === "dict") {
+    const obj = {};
+    for (const line of text.split("\n")) {
+      const i = line.indexOf(":");
+      if (i <= 0) continue;
+      const k = line.slice(0, i).trim();
+      const v = line.slice(i + 1).trim();
+      if (!k) continue;
+      const n = Number(v.replace(/[_.]/g, ""));
+      obj[k] = isNaN(n) || v === "" ? v : n;
+    }
+    return obj;
+  }
+  if (type === "json") {
+    try { return JSON.parse(text); } catch { return []; }
+  }
+  return text;
+}
+
+function renderConfig() {
+  const cfg = state.config || {};
+  const container = $("#config-container");
+  container.innerHTML = Object.entries(CONFIG_META).map(([name, meta]) => {
+    const mod = cfg[name] || {};
+    const fields = Object.entries(meta.fields).map(([key, f]) => {
+      const value = cfgFieldValue(f.type, mod[key], f.keyNames);
+      const desc = f.desc ? `<div class="cfg-desc">${f.desc}</div>` : "";
+      let input;
+      if (f.type === "bool") {
+        input = `<label class="switch"><input type="checkbox" data-module="${name}" data-key="${key}" data-type="bool" ${value ? "checked" : ""}><span class="slider"></span></label>`;
+        return `<div class="cfg-field"><div class="cfg-label"><b>${f.label}</b>${desc}</div>${input}</div>`;
+      }
+      if (f.type === "dict" || f.type === "json") {
+        input = `<textarea rows="3" data-module="${name}" data-key="${key}" data-type="${f.type}">${escapeHtml(value)}</textarea>`;
+      } else {
+        input = `<input data-module="${name}" data-key="${key}" data-type="${f.type}" value="${escapeHtml(String(value))}">`;
+      }
+      return `<div class="cfg-field"><div class="cfg-label"><b>${f.label}</b>${desc}</div>${input}</div>`;
+    }).join("");
+    return `<div class="card config-mod">
+      <div class="module-head">
+        <div><b>${meta.icon} ${meta.label}</b><div class="muted small">${meta.desc}</div></div>
+        <label class="switch"><input type="checkbox" data-module="${name}" data-key="enabled" data-type="bool" ${mod.enabled ? "checked" : ""}><span class="slider"></span></label>
+      </div>
+      <div class="config-fields">${fields}</div>
+    </div>`;
+  }).join("");
+}
+
 async function refreshConfig() {
   try {
-    const cfg = await api("/api/config");
-    state.config = cfg;
-    const container = $("#config-container");
-    container.innerHTML = Object.entries(cfg).map(([name, mod]) => {
-      const fields = Object.entries(mod).filter(([k]) => k !== "enabled").map(([k, v]) => {
-        const value = typeof v === "object" ? JSON.stringify(v) : v;
-        return `<label>${k}<input data-module="${name}" data-key="${k}" value='${String(value).replace(/'/g, "&#39;")}'></label>`;
-      }).join("");
-      return `<div class="card">
-        <div class="toggle">
-          <input type="checkbox" data-module="${name}" data-key="enabled" ${mod.enabled ? "checked" : ""}>
-          <b>${name}</b>
-        </div>
-        <div class="config-row">${fields}</div>
-      </div>`;
-    }).join("");
+    state.config = await api("/api/config");
+    renderConfig();
   } catch (e) { console.error(e); }
 }
 
@@ -195,12 +359,7 @@ $("#btn-save-config").addEventListener("click", async () => {
   const config = {};
   $$("#config-container [data-module]").forEach((el) => {
     const mod = config[el.dataset.module] = config[el.dataset.module] || {};
-    const key = el.dataset.key;
-    let value = el.type === "checkbox" ? el.checked : el.value;
-    if (el.type !== "checkbox") {
-      try { value = JSON.parse(value); } catch { const num = Number(value); if (!isNaN(num) && value !== "") value = num; }
-    }
-    mod[key] = value;
+    mod[el.dataset.key] = cfgParseValue(el.dataset.type, el.type === "checkbox" ? (el.checked ? "1" : "") : el.value);
   });
   try {
     await api("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config }) });

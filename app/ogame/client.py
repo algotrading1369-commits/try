@@ -373,9 +373,26 @@ class OGameClient:
     def resources(self, celestial_id):
         soup = self._page(f"page=resourceSettings&cp={celestial_id}")
         res = {}
+        found = False
         for key in ("metal", "crystal", "deuterium", "darkmatter", "energy"):
             node = soup.find(id=f"resources_{key}")
+            if node is not None:
+                found = True
             res[key] = _to_int(node["data-raw"]) if node is not None else 0
+        if not found:
+            data = self._get(
+                self.index_php + "page=componentOnly&component=resourcesbar&action=fetchResources&asJson=1",
+                headers={"X-Requested-With": "XMLHttpRequest"},
+            ).json()
+            raw = data.get("result", data) if isinstance(data, dict) else {}
+            if isinstance(raw, dict):
+                res["metal"] = _to_int(raw.get("metal", 0))
+                res["crystal"] = _to_int(raw.get("crystal", 0))
+                res["deuterium"] = _to_int(raw.get("deuterium", 0))
+                res["darkmatter"] = _to_int(raw.get("darkmatter", 0))
+                res["energy"] = _to_int(raw.get("energy", 0))
+            res["storage"] = []
+            return res
         boxes = soup.select("#storagebar .bar-box")
         storage = []
         for box in boxes[:3]:
@@ -458,24 +475,35 @@ class OGameClient:
             component = c.BUILDINGS[tech_id]["component"]
         elif tech_id in c.RESEARCHES:
             component = c.COMPONENT_RESEARCH
+        elif tech_id in c.SHIPS:
+            component = c.COMPONENT_SHIPYARD
+        elif tech_id in c.DEFENSES:
+            component = c.COMPONENT_DEFENSES
         else:
             raise OGameError(f"Tecnología {tech_id} no construible")
         raw = self._get(self.index_php + f"page=ingame&component={component}&cp={celestial_id}").text
-        match = re.search(r"var urlQueueAdd = .*?token=([^'\"&;]+)", raw)
+        match = re.search(r'var token = "([0-9a-f]+)"', raw)
+        if match is None:
+            match = re.search(r"window\.token = '([0-9a-f]+)'", raw)
+        if match is None:
+            match = re.search(r"var urlQueueAdd = .*?token=([^'\"&;]+)", raw)
         if match is None:
             raise OGameError("No se encontró token de cola de construcción")
-        token = match.group(1)
-        self._get(
-            self.index_php,
-            params={
-                "page": "ingame",
-                "component": component,
-                "modus": 1,
-                "token": token,
-                "type": tech_id,
-                "menge": amount,
+        resp = self._post(
+            self.index_php + "page=componentOnly&component=buildlistactions&action=scheduleEntry&asJson=1",
+            data={
+                "technologyId": tech_id,
+                "amount": amount,
+                "mode": 1,
+                "token": match.group(1),
+                "planetId": celestial_id,
             },
-        )
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        ).json()
+        if resp.get("status") == "failure":
+            errors = resp.get("errors") or []
+            message = errors[0].get("message", "") if errors and isinstance(errors[0], dict) else str(resp)[:200]
+            raise OGameError(f"El juego rechazó la construcción: {message}")
         return True
 
     def start_research(self, tech_id, celestial_id):
@@ -533,11 +561,24 @@ class OGameClient:
         }
 
     def galaxy(self, galaxy, system):
-        resp = self._post(
-            self.index_php + "page=ingame&component=galaxyContent&ajax=1",
-            data={"galaxy": galaxy, "system": system},
-            headers={"X-Requested-With": "XMLHttpRequest"},
-        ).json()
+        try:
+            resp = self._post(
+                self.index_php + "page=ingame&component=galaxy&action=fetchSolarSystemData&asJson=1",
+                data={"galaxy": galaxy, "system": system},
+                headers={"X-Requested-With": "XMLHttpRequest"},
+            ).json()
+        except Exception:
+            resp = self._post(
+                self.index_php + "page=ingame&component=galaxyContent&ajax=1",
+                data={"galaxy": galaxy, "system": system},
+                headers={"X-Requested-With": "XMLHttpRequest"},
+            ).json()
+        if not resp.get("galaxy"):
+            resp = self._post(
+                self.index_php + "page=ingame&component=galaxyContent&ajax=1",
+                data={"galaxy": galaxy, "system": system},
+                headers={"X-Requested-With": "XMLHttpRequest"},
+            ).json()
         soup = BeautifulSoup(resp.get("galaxy", ""), "html.parser")
         player_ranks = {}
         for node in soup.select("[id^=player]"):
@@ -621,12 +662,24 @@ class OGameClient:
             data=form,
             headers={"X-Requested-With": "XMLHttpRequest"},
         ).json()
-        if not resp.get("success", False):
-            raise OGameError(f"Envío de flota rechazado: {resp}")
+        if not resp.get("success", False) and resp.get("status") != "success":
+            errors = resp.get("errors") or []
+            message = errors[0].get("message", "") if errors and isinstance(errors[0], dict) else str(resp)[:200]
+            raise OGameError(f"Envío de flota rechazado: {message}")
         return resp
 
     def return_fleet(self, fleet_id):
         page = self._get(self.index_php + "page=ingame&component=movement").text
+        if "action=recallFleet" in page:
+            match = re.search(r'var token\s*=\s*"([0-9a-f]+)"', page)
+            if match is None:
+                return False
+            resp = self._post(
+                self.index_php + "page=ingame&component=movement&action=recallFleet&fleetId={}&asJson=1".format(fleet_id),
+                data={"token": match.group(1)},
+                headers={"X-Requested-With": "XMLHttpRequest"},
+            ).json()
+            return resp.get("status") == "success"
         match = re.search(rf'return={fleet_id}&amp;token=([^"&]+)', page)
         if match is None:
             return False
