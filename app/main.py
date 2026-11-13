@@ -131,6 +131,32 @@ class HuntIn(BaseModel):
     player: str
 
 
+@app.get("/api/universes")
+def universes(language: str = "es"):
+    import requests
+
+    try:
+        resp = requests.get(
+            "https://lobby.ogame.gameforge.com/api/servers", timeout=15,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        resp.raise_for_status()
+        servers = resp.json()
+    except Exception as exc:
+        raise HTTPException(502, f"No se pudo consultar la lista de universos: {exc}")
+    result = [
+        {
+            "number": s.get("number"),
+            "name": s.get("name"),
+            "language": s.get("language"),
+        }
+        for s in servers
+        if s.get("name")
+    ]
+    result.sort(key=lambda s: (s["language"] != language, s["language"], str(s["name"])))
+    return {"universes": result}
+
+
 @app.get("/")
 def index():
     return FileResponse(os.path.join(WEB_DIR, "index.html"))

@@ -477,6 +477,29 @@ async function refreshAccount() {
   nf.enabled.checked = !!notify.enabled;
 }
 
+$("#btn-universes").addEventListener("click", async () => {
+  const lang = $("#account-form").language.value || "es";
+  const box = $("#universe-list");
+  box.textContent = "Cargando universos...";
+  try {
+    const data = await api(`/api/universes?language=${encodeURIComponent(lang)}`);
+    $("#universe-options").innerHTML = data.universes
+      .map((u) => `<option value="${escapeHtml(u.name)}">`)
+      .join("");
+    box.innerHTML = data.universes.slice(0, 60).map((u) =>
+      `<a href="#" class="universe-pick" data-name="${escapeHtml(u.name)}" style="margin-right:10px">${escapeHtml(u.name)}</a>`
+    ).join("") + (data.universes.length > 60 ? `<span class="muted">… (${data.universes.length} en total, usa el desplegable del campo)</span>` : "");
+    $$("#universe-list .universe-pick").forEach((a) => {
+      a.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        $("#account-form").universe.value = a.dataset.name;
+      });
+    });
+  } catch (e) {
+    box.textContent = "Error: " + e.message;
+  }
+});
+
 $("#account-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const form = ev.target;

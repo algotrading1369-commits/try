@@ -87,8 +87,13 @@ class OGameClient:
         resp = self.session.post(GF_AUTH, json=payload, timeout=30)
         if resp.status_code == 409:
             raise CaptchaRequired("Gameforge pide captcha; inicia sesión manualmente y usa cookies o reintenta más tarde")
+        if resp.status_code in (400, 401, 403):
+            raise LoginError(
+                "Gameforge rechazó las credenciales: usa el EMAIL de tu cuenta Gameforge "
+                "(no el nick del juego) y su contraseña; si tienes verificación en dos pasos no funcionará"
+            )
         if resp.status_code != 201:
-            raise LoginError(f"Login fallido ({resp.status_code}): revisa usuario/contraseña")
+            raise LoginError(f"Login fallido ({resp.status_code}): Gameforge no aceptó la sesión")
         self.token = resp.json()["token"]
         self.session.headers.update({"authorization": f"Bearer {self.token}"})
         self._resolve_server()
