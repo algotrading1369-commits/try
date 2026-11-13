@@ -124,7 +124,12 @@ class OGameClient:
             },
         )
         if resp.status_code == 201:
-            data = resp.json()
+            try:
+                data = resp.json()
+            except ValueError:
+                raise LoginError("Gameforge devolvió una respuesta ilegible al iniciar sesión")
+            if not isinstance(data, dict):
+                raise LoginError(f"Gameforge devolvió una respuesta inesperada: {str(data)[:200]}")
             self.token = data.get("token")
             if not self.token:
                 raise LoginError("Gameforge no devolvió token de sesión")
@@ -152,7 +157,12 @@ class OGameClient:
         self._enter_game()
 
     def _resolve_server(self):
-        servers = self.session.get(LOBBY + "/api/servers", timeout=30).json()
+        try:
+            servers = self.session.get(LOBBY + "/api/servers", timeout=30).json()
+        except ValueError:
+            raise LoginError("El lobby no respondió con la lista de servidores (respuesta no JSON)")
+        if not isinstance(servers, list):
+            raise LoginError(f"El lobby no devolvió la lista de servidores: {str(servers)[:200]}")
         target = None
         for server in servers:
             if str(server.get("name", "")).lower() == self.universe.lower() and server.get("language") == self.language:
@@ -172,7 +182,12 @@ class OGameClient:
             raise LoginError(f"Universo '{self.universe}' no encontrado en {self.language}.{hint}")
         self.server_number = target["number"]
 
-        accounts = self.session.get(LOBBY + "/api/users/me/accounts", timeout=30).json()
+        try:
+            accounts = self.session.get(LOBBY + "/api/users/me/accounts", timeout=30).json()
+        except ValueError:
+            raise LoginError("El lobby no respondió con la lista de cuentas (respuesta no JSON)")
+        if not isinstance(accounts, list):
+            raise LoginError(f"El lobby no devolvió la lista de cuentas: {str(accounts)[:200]}")
         for account in accounts:
             srv = account.get("server", {})
             if srv.get("number") == self.server_number and srv.get("language") == self.language:
@@ -182,24 +197,31 @@ class OGameClient:
             raise LoginError(f"La cuenta no tiene personaje en {self.universe} ({self.language})")
 
     def _enter_game(self):
-        link = self.session.post(
-            LOBBY + "/api/users/me/loginLink",
-            json={
-                "id": self.server_id,
-                "server": {"language": self.language, "number": self.server_number},
-                "clickedButton": "account_list",
-                "blackbox": generate_blackbox(self.session, self.user_agent),
-            },
-            timeout=30,
-        ).json()
+        try:
+            link = self.session.post(
+                LOBBY + "/api/users/me/loginLink",
+                json={
+                    "id": self.server_id,
+                    "server": {"language": self.language, "number": self.server_number},
+                    "clickedButton": "account_list",
+                    "blackbox": generate_blackbox(self.session, self.user_agent),
+                },
+                timeout=30,
+            ).json()
+        except ValueError:
+            raise LoginError("El lobby no respondió con JSON al pedir el enlace de entrada")
         if not isinstance(link, dict) or "url" not in link:
             raise LoginError(f"El lobby no devolvió enlace de entrada: {str(link)[:200]}")
         self.index_php = f"https://s{self.server_number}-{self.language}.ogame.gameforge.com/game/index.php?"
         self._get(link["url"])
         page = self._get(self.index_php + "page=ingame").text
         soup = BeautifulSoup(page, "html.parser")
-        self.player = soup.find("meta", {"name": "ogame-player-name"})["content"]
-        self.player_id = int(soup.find("meta", {"name": "ogame-player-id"})["content"])
+        player_name = soup.find("meta", {"name": "ogame-player-name"})
+        player_id = soup.find("meta", {"name": "ogame-player-id"})
+        if player_name is None or player_id is None:
+            raise LoginError("Entramos al juego pero la página no cargó la cuenta (posible mantenimiento del universo o sesión rechazada)")
+        self.player = player_name["content"]
+        self.player_id = int(player_id["content"])
         version = soup.find("meta", {"name": "ogame-version"})
         self.server_version = version["content"] if version else None
         speed = soup.find("meta", {"name": "ogame-universe-speed"})
