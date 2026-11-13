@@ -96,7 +96,7 @@ class OGameClient:
                 token = token.split("=", 1)[1].strip().strip('"').strip("'")
             self.token = token
             self.session.headers.update({"authorization": f"Bearer {self.token}"})
-            check = self.session.get(LOBBY + "/api/users/me", timeout=30)
+            check = self.session.get(LOBBY + "/api/users/me", timeout=30, headers={"Referer": LOBBY + "/", "Accept": "application/json"})
             if check.status_code == 401:
                 raise LoginError("La cookie de sesión ha caducado: entra de nuevo en el lobby y copia una nueva")
             if check.status_code != 200:
@@ -158,7 +158,7 @@ class OGameClient:
 
     def _resolve_server(self):
         try:
-            servers = self.session.get(LOBBY + "/api/servers", timeout=30).json()
+            servers = self.session.get(LOBBY + "/api/servers", timeout=30, headers={"Referer": LOBBY + "/", "Accept": "application/json"}).json()
         except ValueError:
             raise LoginError("El lobby no respondió con la lista de servidores (respuesta no JSON)")
         if not isinstance(servers, list):
@@ -183,22 +183,28 @@ class OGameClient:
         self.server_number = target["number"]
 
         try:
-            accounts = self.session.get(LOBBY + "/api/users/me/accounts", timeout=30).json()
+            accounts = self.session.get(LOBBY + "/api/users/me/accounts", timeout=30, headers={"Referer": LOBBY + "/", "Accept": "application/json"}).json()
         except ValueError:
             raise LoginError("El lobby no respondió con la lista de cuentas (respuesta no JSON)")
         if not isinstance(accounts, list):
             raise LoginError(f"El lobby no devolvió la lista de cuentas: {str(accounts)[:200]}")
+        blocked_match = False
         for account in accounts:
-            srv = account.get("server", {})
+            srv = account.get("server", {}) or {}
             if srv.get("number") == self.server_number and srv.get("language") == self.language:
+                if account.get("blocked"):
+                    blocked_match = True
+                    continue
                 self.server_id = account["id"]
                 break
         if self.server_id is None:
+            if blocked_match:
+                raise LoginError(f"Tu cuenta en {self.universe} está bloqueada o en modo vacaciones: revisa tu correo de Gameforge")
             raise LoginError(f"La cuenta no tiene personaje en {self.universe} ({self.language})")
 
     def _enter_game(self):
         try:
-            link = self.session.post(
+            resp = self.session.post(
                 LOBBY + "/api/users/me/loginLink",
                 json={
                     "id": self.server_id,
@@ -207,14 +213,26 @@ class OGameClient:
                     "blackbox": generate_blackbox(self.session, self.user_agent),
                 },
                 timeout=30,
-            ).json()
+                headers={
+                    "Origin": LOBBY,
+                    "Referer": LOBBY + "/",
+                    "Accept": "application/json",
+                },
+            )
+        except requests.RequestException as exc:
+            raise LoginError(f"No se pudo contactar con el lobby para entrar al juego: {exc}")
+        try:
+            link = resp.json()
         except ValueError:
-            raise LoginError("El lobby no respondió con JSON al pedir el enlace de entrada")
+            raise LoginError(f"El lobby respondió {resp.status_code} sin JSON al pedir el enlace de entrada: {resp.text[:200]}")
         if not isinstance(link, dict) or "url" not in link:
-            raise LoginError(f"El lobby no devolvió enlace de entrada: {str(link)[:200]}")
+            raise LoginError(f"El lobby rechazó la entrada ({resp.status_code}): {str(link)[:200]}")
         self.index_php = f"https://s{self.server_number}-{self.language}.ogame.gameforge.com/game/index.php?"
-        self._get(link["url"])
-        page = self._get(self.index_php + "page=ingame").text
+        try:
+            self._get(link["url"])
+            page = self._get(self.index_php + "page=ingame").text
+        except requests.RequestException as exc:
+            raise LoginError(f"El servidor del juego no cargó la página: {exc}")
         soup = BeautifulSoup(page, "html.parser")
         player_name = soup.find("meta", {"name": "ogame-player-name"})
         player_id = soup.find("meta", {"name": "ogame-player-id"})

@@ -561,10 +561,17 @@ $("#notify-form").addEventListener("submit", async (ev) => {
 });
 
 $("#btn-start").addEventListener("click", async () => {
+  const msg = $("#start-msg");
+  msg.classList.remove("hidden");
+  msg.textContent = "⏳ Iniciando… conectando con el lobby de OGame";
   try {
     await api("/api/bot/start", { method: "POST" });
+    msg.textContent = "✅ Bot iniciado. En unos segundos verás datos en el Panel.";
     toast("Bot iniciado 🚀", "success");
-  } catch (e) { toast("Error: " + e.message, "error"); }
+  } catch (e) {
+    msg.textContent = "❌ " + e.message;
+    toast("Error al iniciar: " + e.message, "error");
+  }
   refreshStatus();
 });
 
