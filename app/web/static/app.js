@@ -515,10 +515,12 @@ $("#account-form").language.addEventListener("change", (ev) => {
 $("#account-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const form = ev.target;
+  const msg = $("#account-msg");
   if (!form.password.value && !form.session_token.value && !form.demo.checked) {
-    toast("Necesitas la contraseña o una cookie de sesión (o activa el modo demo)", "error");
+    msg.textContent = "❌ Necesitas la contraseña o una cookie de sesión (o activa el modo demo)";
     return;
   }
+  msg.textContent = "Guardando…";
   try {
     await api("/api/account", {
       method: "POST",
@@ -532,9 +534,13 @@ $("#account-form").addEventListener("submit", async (ev) => {
         session_token: form.session_token.value.trim(),
       }),
     });
+    msg.textContent = "✅ Cuenta guardada y cookie validada. Pulsa Iniciar arriba.";
     toast("Cuenta guardada. Ya puedes iniciar el bot.", "success");
     refreshStatus();
-  } catch (e) { toast("Error: " + e.message, "error"); }
+  } catch (e) {
+    msg.textContent = "❌ " + e.message;
+    toast("Error: " + e.message, "error");
+  }
 });
 
 $("#notify-form").addEventListener("submit", async (ev) => {
