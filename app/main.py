@@ -110,6 +110,16 @@ class BuildIn(BaseModel):
     amount: int = 1
 
 
+class QueueIn(BaseModel):
+    tech_id: int
+    planet_id: int = 0
+    amount: int = 1
+
+
+class QueueRemoveIn(BaseModel):
+    index: int
+
+
 class ScanIn(BaseModel):
     galaxy: int
     system: int
@@ -515,6 +525,36 @@ def action_build(payload: BuildIn):
     except Exception as exc:
         raise HTTPException(502, f"No se pudo construir: {exc}")
     db.add_log("info", "manual", f"Construcción manual: tech {payload.tech_id} en {payload.planet_id}")
+    return {"ok": True}
+
+
+@app.get("/api/queue")
+def get_queue():
+    return {"queue": db.get_setting("manual_queue", [])}
+
+
+@app.post("/api/queue")
+def push_queue(payload: QueueIn):
+    from .ogame import constants as c
+
+    known = any(payload.tech_id in cat for cat in (c.BUILDINGS, c.RESEARCHES, c.SHIPS, c.DEFENSES))
+    if not known:
+        raise HTTPException(400, f"Tecnología {payload.tech_id} desconocida")
+    if payload.amount < 1 or payload.amount > 10000:
+        raise HTTPException(400, "Cantidad entre 1 y 10000")
+    queue = db.get_setting("manual_queue", [])
+    queue.append({"tech_id": payload.tech_id, "planet_id": payload.planet_id, "amount": payload.amount})
+    db.set_setting("manual_queue", queue)
+    return {"ok": True, "position": len(queue)}
+
+
+@app.post("/api/queue/remove")
+def remove_queue(payload: QueueRemoveIn):
+    queue = db.get_setting("manual_queue", [])
+    if payload.index < 0 or payload.index >= len(queue):
+        raise HTTPException(400, "Ese pedido ya no existe en la cola")
+    queue.pop(payload.index)
+    db.set_setting("manual_queue", queue)
     return {"ok": True}
 
 

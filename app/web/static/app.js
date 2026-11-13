@@ -64,7 +64,9 @@ function tab(name) {
   if (name === "farmer") refreshTargets();
   if (name === "hunt") refreshHunt();
   if (name === "galaxy") refreshGalaxy();
-  if (name === "config") refreshConfig();
+  if (["build", "research", "hangar", "farmer", "hunt", "expeditions", "fleetsave", "colonies", "transports", "config"].includes(name)) refreshConfig();
+  if (name === "build" || name === "research") refreshQueue();
+  if (name === "build" || name === "research" || name === "hangar") refreshPlanets();
   if (name === "logs") refreshLogs();
   if (name === "account") refreshAccount();
 }
@@ -175,10 +177,10 @@ const DEF_NAMES = {401:"Lanzamisiles",402:"Láser pequeño",403:"Láser grande",
 const TECH_NAMES = Object.assign({}, SHIP_NAMES, DEF_NAMES, {
   1:"Mina de metal",2:"Mina de cristal",3:"Sintetizador de deuterio",4:"Planta solar",12:"Planta de fusión",
   14:"Fábrica de robots",15:"Fábrica de nanites",21:"Hangar",22:"Almacén de metal",23:"Almacén de cristal",24:"Tanque de deuterio",
-  31:"Laboratorio de investigación",36:"Terraformer",
-  106:"Tecnología láser",108:"Tecnología de energía",109:"Tecnología de blindaje",110:"Tecnología de armas",111:"Tecnología de escudos",
-  113:"Propulsor de combustión",115:"Propulsor de impulso",117:"Propulsor de hiperespacio",120:"Tecnología de espionaje",
-  121:"Computación cuántica",122:"Gravitón",123:"Red de investigación intergaláctica",124:"Astrofísica"
+  31:"Laboratorio de investigación",36:"Astillero orbital",41:"Base lunar",42:"Sensor de falange",43:"Puerta de salto",44:"Silo de misiles",
+  106:"Tecnología de espionaje",108:"Computación cuántica",109:"Tecnología de armas",110:"Tecnología de escudos",111:"Tecnología de blindaje",
+  113:"Tecnología de energía",115:"Propulsor de combustión",117:"Propulsor de impulso",118:"Propulsor de hiperespacio",
+  120:"Tecnología láser",121:"Tecnología de iones",122:"Tecnología de plasma",123:"Red de investigación intergaláctica",124:"Astrofísica"
 });
 
 const CONFIG_META = {
@@ -318,46 +320,59 @@ function cfgParseValue(type, raw) {
   return text;
 }
 
-function renderConfig() {
-  const cfg = state.config || {};
-  const container = $("#config-container");
-  container.innerHTML = Object.entries(CONFIG_META).map(([name, meta]) => {
-    const mod = cfg[name] || {};
-    const fields = Object.entries(meta.fields).map(([key, f]) => {
-      const value = cfgFieldValue(f.type, mod[key], f.keyNames);
-      const desc = f.desc ? `<div class="cfg-desc">${f.desc}</div>` : "";
-      let input;
-      if (f.type === "bool") {
-        input = `<label class="switch"><input type="checkbox" data-module="${name}" data-key="${key}" data-type="bool" ${value ? "checked" : ""}><span class="slider"></span></label>`;
-        return `<div class="cfg-field"><div class="cfg-label"><b>${f.label}</b>${desc}</div>${input}</div>`;
-      }
-      if (f.type === "dict" || f.type === "json") {
-        input = `<textarea rows="3" data-module="${name}" data-key="${key}" data-type="${f.type}">${escapeHtml(value)}</textarea>`;
-      } else {
-        input = `<input data-module="${name}" data-key="${key}" data-type="${f.type}" value="${escapeHtml(String(value))}">`;
-      }
+function cfgModuleCard(name, meta, mod) {
+  const fields = Object.entries(meta.fields).map(([key, f]) => {
+    const value = cfgFieldValue(f.type, mod[key], f.keyNames);
+    const desc = f.desc ? `<div class="cfg-desc">${f.desc}</div>` : "";
+    let input;
+    if (f.type === "bool") {
+      input = `<label class="switch"><input type="checkbox" data-module="${name}" data-key="${key}" data-type="bool" ${value ? "checked" : ""}><span class="slider"></span></label>`;
       return `<div class="cfg-field"><div class="cfg-label"><b>${f.label}</b>${desc}</div>${input}</div>`;
-    }).join("");
-    return `<div class="card config-mod">
-      <div class="module-head">
-        <div><b>${meta.icon} ${meta.label}</b><div class="muted small">${meta.desc}</div></div>
-        <label class="switch"><input type="checkbox" data-module="${name}" data-key="enabled" data-type="bool" ${mod.enabled ? "checked" : ""}><span class="slider"></span></label>
-      </div>
-      <div class="config-fields">${fields}</div>
-    </div>`;
+    }
+    if (f.type === "dict" || f.type === "json") {
+      input = `<textarea rows="3" data-module="${name}" data-key="${key}" data-type="${f.type}">${escapeHtml(value)}</textarea>`;
+    } else {
+      input = `<input data-module="${name}" data-key="${key}" data-type="${f.type}" value="${escapeHtml(String(value))}">`;
+    }
+    return `<div class="cfg-field"><div class="cfg-label"><b>${f.label}</b>${desc}</div>${input}</div>`;
   }).join("");
+  return `<div class="card config-mod">
+    <div class="module-head">
+      <div><b>${meta.icon} ${meta.label}</b><div class="muted small">${meta.desc}</div></div>
+      <label class="switch"><input type="checkbox" data-module="${name}" data-key="enabled" data-type="bool" ${mod.enabled ? "checked" : ""}><span class="slider"></span></label>
+    </div>
+    <div class="config-fields">${fields}</div>
+  </div>`;
+}
+
+function renderConfigInto(container, moduleNames) {
+  const cfg = state.config || {};
+  container.innerHTML = moduleNames.filter((n) => CONFIG_META[n]).map((n) => cfgModuleCard(n, CONFIG_META[n], cfg[n] || {})).join("");
+}
+
+function renderAllCfgMounts() {
+  $$(".cfg-mount").forEach((el) => renderConfigInto(el, el.dataset.modules.split(",")));
+}
+
+function renderConfig() {
+  renderConfigInto($("#config-container"), ["buildings", "sleep", "schedule"]);
 }
 
 async function refreshConfig() {
   try {
     state.config = await api("/api/config");
     renderConfig();
+    renderAllCfgMounts();
   } catch (e) { console.error(e); }
 }
 
-$("#btn-save-config").addEventListener("click", async () => {
+document.addEventListener("click", async (ev) => {
+  const btn = ev.target.closest(".btn-save-cfg");
+  if (!btn) return;
+  const section = btn.closest(".tab-page");
+  if (!section) return;
   const config = {};
-  $$("#config-container [data-module]").forEach((el) => {
+  section.querySelectorAll("[data-module]").forEach((el) => {
     const mod = config[el.dataset.module] = config[el.dataset.module] || {};
     mod[el.dataset.key] = cfgParseValue(el.dataset.type, el.type === "checkbox" ? (el.checked ? "1" : "") : el.value);
   });
@@ -551,6 +566,13 @@ function populateFleetForms(data) {
   if (celestials.length) {
     fillSelect($("#mf-origin"), celestials, (c) => c.label);
     fillSelect($("#mb-planet"), celestials, (c) => c.label);
+    const bq = $("#bq-planet");
+    if (bq) {
+      const current = bq.value;
+      fillSelect(bq, celestials, (c) => c.label);
+      bq.insertAdjacentHTML("afterbegin", '<option value="0">Automático (primer planeta libre)</option>');
+      bq.value = current || "0";
+    }
   }
   const cat = state.status || {};
   const kind = $("#mb-kind").value;
@@ -605,6 +627,57 @@ $("#btn-mb-build").addEventListener("click", async () => {
       }),
     });
     toast("🏭 Pedido enviado a la cola", "success");
+  } catch (e) { toast("Error: " + e.message, "error"); }
+});
+
+const BUILD_GRID = [1, 2, 3, 4, 12, 14, 15, 21, 22, 23, 24, 31, 36, 44, 41, 42, 43];
+const RESEARCH_GRID = [106, 108, 109, 110, 111, 113, 115, 117, 118, 120, 121, 122, 123, 124];
+
+function renderBuildGrids() {
+  const mk = (ids) => ids.map((id) => `<button class="btn build-btn" data-tech="${id}">${TECH_NAMES[id] || "Tech " + id}</button>`).join("");
+  const bg = $("#build-grid");
+  const rg = $("#research-grid");
+  if (bg) bg.innerHTML = mk(BUILD_GRID);
+  if (rg) rg.innerHTML = mk(RESEARCH_GRID);
+}
+
+function queueItemName(q) {
+  return TECH_NAMES[q.tech_id] || "Tech " + q.tech_id;
+}
+
+function renderQueue(items) {
+  const html = items.length
+    ? items.map((q, i) => `<div class="queue-item"><span class="q-pos">${i + 1}</span><span class="q-name"><b>${escapeHtml(queueItemName(q))}</b>${q.amount > 1 ? " × " + q.amount : ""}</span><span class="muted small">${q.planet_id ? "planeta #" + q.planet_id : "auto"}</span><button class="btn danger btn-q-del" data-index="${i}">✕</button></div>`).join("")
+    : '<div class="muted">La cola está vacía. Haz clic en un edificio o investigación para añadir un pedido.</div>';
+  $$(".queue-list").forEach((el) => { el.innerHTML = html; });
+  $$(".btn-q-del").forEach((btn) => btn.addEventListener("click", async () => {
+    try {
+      await api("/api/queue/remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ index: +btn.dataset.index }) });
+      refreshQueue();
+    } catch (e) { toast("Error: " + e.message, "error"); }
+  }));
+}
+
+async function refreshQueue() {
+  try {
+    renderQueue((await api("/api/queue")).queue || []);
+  } catch (e) { console.error(e); }
+}
+
+document.addEventListener("click", async (ev) => {
+  const btn = ev.target.closest(".build-btn");
+  if (!btn) return;
+  const techId = +btn.dataset.tech;
+  const planetSel = $("#bq-planet");
+  const planetId = RESEARCH_GRID.includes(techId) ? 0 : +(planetSel && planetSel.value ? planetSel.value : 0);
+  try {
+    await api("/api/queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tech_id: techId, planet_id: planetId, amount: 1 }),
+    });
+    toast(`<b>${escapeHtml(queueItemName({ tech_id: techId }))}</b> añadido a la cola ✓`, "success");
+    refreshQueue();
   } catch (e) { toast("Error: " + e.message, "error"); }
 });
 
@@ -859,9 +932,10 @@ function refreshAll() {
   refreshStatus().then(() => { if (state.status) { state.config = state.config; } });
   refreshSummary();
   drawChart();
-  api("/api/config").then((cfg) => { state.config = cfg; renderStatus(); }).catch(() => {});
+  api("/api/config").then((cfg) => { state.config = cfg; renderStatus(); renderAllCfgMounts(); }).catch(() => {});
 }
 
+renderBuildGrids();
 connectStream();
 refreshAll();
 setInterval(refreshStatus, 5000);

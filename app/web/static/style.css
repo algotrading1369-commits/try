@@ -346,3 +346,11 @@ th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size
   .two-col, .config-row { grid-template-columns: 1fr; }
   .stat-row { grid-template-columns: repeat(2, 1fr); }
 }
+
+.build-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 10px; }
+.build-grid .btn { text-align: left; }
+.queue-list { margin-top: 10px; }
+.queue-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; }
+.queue-item .q-pos { color: var(--muted); font-size: 12px; min-width: 18px; }
+.queue-item .q-name { flex: 1; }
+.cfg-mount { margin-bottom: 14px; }

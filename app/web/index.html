@@ -39,12 +39,19 @@
 
 <nav id="main-nav">
   <button class="tab active" data-tab="dashboard">📊 Panel</button>
+  <button class="tab" data-tab="build">🏗️ Construir</button>
+  <button class="tab" data-tab="research">🔬 Investigar</button>
+  <button class="tab" data-tab="hangar">🚢 Hangar</button>
   <button class="tab" data-tab="planets">🪐 Imperio</button>
-  <button class="tab" data-tab="fleet">🚀 Flotas</button>
   <button class="tab" data-tab="farmer">🎯 Objetivos</button>
+  <button class="tab" data-tab="expeditions">🚀 Expediciones</button>
+  <button class="tab" data-tab="fleetsave">🛡️ Fleet-save</button>
+  <button class="tab" data-tab="colonies">🌱 Colonias</button>
+  <button class="tab" data-tab="transports">🚚 Transportes</button>
   <button class="tab" data-tab="hunt">🛠️ Caza</button>
   <button class="tab" data-tab="galaxy">🌌 Galaxia</button>
-  <button class="tab" data-tab="config">⚙️ Configuración</button>
+  <button class="tab" data-tab="fleet">🚀 Flotas</button>
+  <button class="tab" data-tab="config">⚙️ Ajustes</button>
   <button class="tab" data-tab="account">👤 Cuenta</button>
   <button class="tab" data-tab="logs">📜 Registros</button>
 </nav>
@@ -120,18 +127,6 @@
       </div>
       <button class="btn primary" id="btn-mf-send">🚀 Enviar flota</button>
     </div>
-    <div class="card wide"><h3>🏭 Construir naves o defensas</h3>
-      <div class="config-row">
-        <label>Planeta<select id="mb-planet"></select></label>
-        <label>Tipo<select id="mb-kind">
-          <option value="ships">Naves</option>
-          <option value="defenses">Defensas</option>
-        </select></label>
-        <label>¿Qué?<select id="mb-tech"></select></label>
-        <label>Cantidad<input type="number" id="mb-amount" value="10" min="1"></label>
-      </div>
-      <button class="btn primary" id="btn-mb-build">🏭 Construir</button>
-    </div>
     <div class="card wide"><h3>Flotas en movimiento</h3>
       <div class="table-wrap">
       <table id="fleets-table">
@@ -143,6 +138,8 @@
   </section>
 
   <section id="tab-farmer" class="tab-page">
+  <div class="cfg-mount" data-modules="farmer"></div>
+  <button class="btn primary btn-save-cfg">💾 Guardar ajustes del farmer</button>
     <div class="card">
       <h3>Escanear sistema manualmente</h3>
       <div class="scan-row">
@@ -225,11 +222,84 @@
       </table>
       </div>
     </div>
+    <div class="cfg-mount" data-modules="mapper,hunt,watch"></div>
+  <button class="btn primary btn-save-cfg">💾 Guardar ajustes de caza y vigilancia</button>
   </section>
 
-  <section id="tab-config" class="tab-page">
+    <section id="tab-build" class="tab-page">
+    <div class="card wide">
+      <h3>🧱 Cola de construcción manual</h3>
+      <p class="muted small">Haz clic en un edificio para añadirlo a la cola. El bot construye los pedidos en orden, uno cada vez, en cuanto haya recursos y la cola del planeta esté libre. Si dejas el planeta en "Automático", usa el primer planeta que tenga la cola libre.</p>
+      <div class="config-row">
+        <label>Planeta destino
+          <select id="bq-planet"><option value="0">Automático (primer planeta libre)</option></select>
+        </label>
+      </div>
+      <div id="build-grid" class="build-grid"></div>
+    </div>
+    <div class="card wide">
+      <h3>📋 Pedidos en cola</h3>
+      <div class="queue-list"><div class="muted">Cargando…</div></div>
+    </div>
+    <div class="cfg-mount" data-modules="buildings"></div>
+    <button class="btn primary btn-save-cfg">💾 Guardar construcción inteligente</button>
+  </section>
+
+  <section id="tab-research" class="tab-page">
+    <div class="card wide">
+      <h3>🔬 Añadir investigación a la cola</h3>
+      <p class="muted small">Las investigaciones se hacen en el laboratorio de tu primer planeta. El bot procesa un pedido cada vez, cuando el laboratorio esté libre y haya recursos.</p>
+      <div id="research-grid" class="build-grid"></div>
+    </div>
+    <div class="card wide">
+      <h3>📋 Pedidos en cola</h3>
+      <div class="queue-list"><div class="muted">Cargando…</div></div>
+    </div>
+    <div class="cfg-mount" data-modules="research"></div>
+    <button class="btn primary btn-save-cfg">💾 Guardar ajustes de investigación</button>
+  </section>
+
+  <section id="tab-hangar" class="tab-page">
+<div class="card wide"><h3>🏭 Construir naves o defensas</h3>
+      <div class="config-row">
+        <label>Planeta<select id="mb-planet"></select></label>
+        <label>Tipo<select id="mb-kind">
+          <option value="ships">Naves</option>
+          <option value="defenses">Defensas</option>
+        </select></label>
+        <label>¿Qué?<select id="mb-tech"></select></label>
+        <label>Cantidad<input type="number" id="mb-amount" value="10" min="1"></label>
+      </div>
+      <button class="btn primary" id="btn-mb-build">🏭 Construir</button>
+    </div>
+    <div class="cfg-mount" data-modules="shipyard"></div>
+    <button class="btn primary btn-save-cfg">💾 Guardar ajustes del hangar</button>
+  </section>
+
+  <section id="tab-expeditions" class="tab-page">
+    <div class="cfg-mount" data-modules="expedition"></div>
+    <button class="btn primary btn-save-cfg">💾 Guardar expediciones</button>
+  </section>
+
+  <section id="tab-fleetsave" class="tab-page">
+    <div class="cfg-mount" data-modules="fleetsave"></div>
+    <button class="btn primary btn-save-cfg">💾 Guardar fleet-save</button>
+  </section>
+
+  <section id="tab-colonies" class="tab-page">
+    <div class="cfg-mount" data-modules="colonize"></div>
+    <button class="btn primary btn-save-cfg">💾 Guardar colonización</button>
+  </section>
+
+  <section id="tab-transports" class="tab-page">
+    <div class="cfg-mount" data-modules="transport"></div>
+    <button class="btn primary btn-save-cfg">💾 Guardar transportes</button>
+  </section>
+
+<section id="tab-config" class="tab-page">
+    <p class="muted small">Ajustes generales del bot: construcción inteligente, modo noche y apagado programado. Cada módulo tiene ahora su propia pestaña con sus ajustes.</p>
     <div id="config-container"></div>
-    <button id="btn-save-config" class="btn primary">💾 Guardar configuración</button>
+    <button id="btn-save-config" class="btn primary btn-save-cfg">💾 Guardar configuración</button>
   </section>
 
   <section id="tab-account" class="tab-page">

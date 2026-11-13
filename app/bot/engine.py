@@ -16,8 +16,10 @@ from .modules.colonize import ColonizeModule
 from .modules.mapper import GalaxyMapperModule, HuntModule
 from .modules.harvest import HarvestModule
 from .modules.watch import WatchModule
+from .modules.manual import ManualQueueModule
 
 MODULE_CLASSES = [
+    ManualQueueModule,
     FleetSaveModule,
     SleepModule,
     BuildingsModule,
@@ -34,6 +36,10 @@ MODULE_CLASSES = [
 ]
 
 DEFAULT_CONFIG = {
+    "manual": {
+        "enabled": True,
+        "interval": 30,
+    },
     "buildings": {
         "enabled": True,
         "interval": 120,
