@@ -236,10 +236,11 @@
       <div class="card">
         <h3>Cuenta de OGame</h3>
         <form id="account-form">
-          <label>Universo <input name="universe" list="universe-options" placeholder="p. ej. Andromeda" required></label>
-          <datalist id="universe-options"></datalist>
-          <button type="button" class="btn" id="btn-universes">🌐 Ver universos disponibles</button>
-          <div id="universe-list" class="muted small"></div>
+          <label>Universo <select name="universe" required></select></label>
+          <div class="muted small">
+            <button type="button" class="btn" id="btn-universes">🔄 Recargar lista</button>
+            <span id="universe-count"></span>
+          </div>
           <label>Idioma / comunidad
             <select name="language">
               <option value="es">Español (es)</option>

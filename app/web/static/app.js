@@ -466,8 +466,8 @@ $("#btn-scan").addEventListener("click", async () => {
 async function refreshAccount() {
   const acc = await api("/api/account");
   const form = $("#account-form");
-  form.universe.value = acc.universe;
   form.language.value = acc.language || "es";
+  await loadUniverseOptions(form.language.value, acc.universe);
   form.username.value = acc.username;
   form.demo.checked = !!acc.demo;
   const notify = await api("/api/notify");
@@ -477,27 +477,38 @@ async function refreshAccount() {
   nf.enabled.checked = !!notify.enabled;
 }
 
-$("#btn-universes").addEventListener("click", async () => {
-  const lang = $("#account-form").language.value || "es";
-  const box = $("#universe-list");
-  box.textContent = "Cargando universos...";
+async function loadUniverseOptions(language, selected) {
+  const sel = $("#account-form").universe;
+  sel.innerHTML = `<option value="">Cargando universos…</option>`;
+  $("#universe-count").textContent = "";
   try {
-    const data = await api(`/api/universes?language=${encodeURIComponent(lang)}`);
-    $("#universe-options").innerHTML = data.universes
-      .map((u) => `<option value="${escapeHtml(u.name)}">`)
+    const data = await api(`/api/universes?language=${encodeURIComponent(language)}`);
+    const list = data.universes.filter((u) => u.language === language);
+    const shown = list.length ? list : data.universes;
+    sel.innerHTML = shown
+      .map((u) => `<option value="${escapeHtml(u.name)}">${escapeHtml(u.name)} (s${u.number})</option>`)
       .join("");
-    box.innerHTML = data.universes.slice(0, 60).map((u) =>
-      `<a href="#" class="universe-pick" data-name="${escapeHtml(u.name)}" style="margin-right:10px">${escapeHtml(u.name)}</a>`
-    ).join("") + (data.universes.length > 60 ? `<span class="muted">… (${data.universes.length} en total, usa el desplegable del campo)</span>` : "");
-    $$("#universe-list .universe-pick").forEach((a) => {
-      a.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        $("#account-form").universe.value = a.dataset.name;
-      });
-    });
+    if (selected) {
+      if (![...sel.options].some((o) => o.value === selected)) {
+        sel.insertAdjacentHTML("afterbegin", `<option value="${escapeHtml(selected)}">${escapeHtml(selected)} (guardado)</option>`);
+      }
+      sel.value = selected;
+    }
+    $("#universe-count").textContent = `${shown.length} universos en '${language}'`;
   } catch (e) {
-    box.textContent = "Error: " + e.message;
+    sel.innerHTML = `<option value="">(no se pudo cargar la lista)</option>`;
   }
+}
+
+const reloadUniverses = () => {
+  const form = $("#account-form");
+  loadUniverseOptions(form.language.value, form.universe.value);
+};
+
+$("#btn-universes").addEventListener("click", reloadUniverses);
+
+$("#account-form").language.addEventListener("change", (ev) => {
+  loadUniverseOptions(ev.target.value, "");
 });
 
 $("#account-form").addEventListener("submit", async (ev) => {

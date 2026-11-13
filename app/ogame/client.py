@@ -1,3 +1,4 @@
+import difflib
 import random
 import re
 import time
@@ -140,7 +141,11 @@ class OGameClient:
                     self.language = server.get("language", self.language)
                     break
         if target is None:
-            raise LoginError(f"Universo '{self.universe}' no encontrado en {self.language}")
+            suggestion = difflib.get_close_matches(
+                self.universe, [str(s.get("name", "")) for s in servers], n=1, cutoff=0.6
+            )
+            hint = f" ¿Quisiste decir '{suggestion[0]}'?" if suggestion else " Usa el botón 'Ver universos disponibles' para copiar el nombre exacto"
+            raise LoginError(f"Universo '{self.universe}' no encontrado en {self.language}.{hint}")
         self.server_number = target["number"]
 
         accounts = self.session.get(LOBBY + "/api/users/me/accounts", timeout=30).json()
