@@ -128,12 +128,12 @@ class Database:
         rows = self.query("SELECT * FROM accounts WHERE active = 1 ORDER BY id LIMIT 1")
         return rows[0] if rows else None
 
-    def save_account(self, universe, language, username, password, demo, session_token="", game_cookies=""):
+    def save_account(self, universe, language, username, password, demo, session_token="", game_cookies="", user_agent=""):
         with self.lock, self._connect() as conn:
             conn.execute("UPDATE accounts SET active = 0")
             conn.execute(
-                "INSERT INTO accounts (universe, language, username, password, demo, session_token, game_cookies, active, created_at) VALUES (?,?,?,?,?,?,?,1,?)",
-                (universe, language, username, password, 1 if demo else 0, session_token or "", game_cookies or "", time.time()),
+                "INSERT INTO accounts (universe, language, username, password, demo, session_token, game_cookies, user_agent, active, created_at) VALUES (?,?,?,?,?,?,?,?,1,?)",
+                (universe, language, username, password, 1 if demo else 0, session_token or "", game_cookies or "", user_agent or "", time.time()),
             )
 
     def _migrate_schema(self, conn):
@@ -142,6 +142,8 @@ class Database:
             conn.execute("ALTER TABLE accounts ADD COLUMN session_token TEXT NOT NULL DEFAULT ''")
         if "game_cookies" not in cols:
             conn.execute("ALTER TABLE accounts ADD COLUMN game_cookies TEXT NOT NULL DEFAULT ''")
+        if "user_agent" not in cols:
+            conn.execute("ALTER TABLE accounts ADD COLUMN user_agent TEXT NOT NULL DEFAULT ''")
 
     def get_setting(self, key, default=None):
         rows = self.query("SELECT value FROM settings WHERE key = ?", (key,))

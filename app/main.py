@@ -207,6 +207,7 @@ def save_account(payload: AccountIn):
     if token.lower().startswith("gf-token-production="):
         token = token.split("=", 1)[1].strip().strip('"').strip("'")
     game_cookies = payload.game_cookies.strip()
+    saved_ua = ""
     if game_cookies.lower().startswith("cookie:"):
         game_cookies = game_cookies.split(":", 1)[1].strip()
     if game_cookies and not payload.demo:
@@ -222,13 +223,27 @@ def save_account(payload: AccountIn):
             pass
         if number is None:
             raise HTTPException(400, f"No encontré el universo {payload.universe} ({payload.language}): revisa el nombre")
-        check = rq.get(
-            f"https://s{number}-{payload.language}.ogame.gameforge.com/game/index.php?page=ingame",
-            headers={"Cookie": game_cookies, "User-Agent": "Mozilla/5.0"},
-            timeout=20,
-        )
-        if check.status_code != 200 or "ogame-player-name" not in check.text:
-            raise HTTPException(400, "La sesión de juego no es válida: entra al juego en el navegador y copia la cookie PHPSESSID del dominio s277-es.ogame.gameforge.com mientras estás DENTRO")
+        game_url = f"https://s{number}-{payload.language}.ogame.gameforge.com/game/index.php?page=ingame"
+        working_ua = None
+        seen_status = None
+        for ua in (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Mozilla/5.0",
+        ):
+            try:
+                check = rq.get(game_url, headers={"Cookie": game_cookies, "User-Agent": ua}, timeout=20, allow_redirects=False)
+            except rq.RequestException as exc:
+                raise HTTPException(400, f"No pude conectar con el servidor del juego: {exc}")
+            seen_status = check.status_code
+            if check.status_code == 200 and "ogame-player-name" in check.text:
+                working_ua = ua
+                break
+        if working_ua is None:
+            detail = "el servidor te manda al lobby (sesión no válida o incompleta)" if seen_status in (301, 302, 303, 307) else f"el servidor respondió {seen_status}"
+            raise HTTPException(400, f"La sesión de juego no es válida ({detail}). Copia TODAS las cookies del dominio del juego: F12 → Network → recarga la página del juego → clic en la primera petición (index.php) → en Request Headers copia el valor completo de 'Cookie:' y pégalo aquí")
+        saved_ua = working_ua
     if token and not payload.demo:
         import requests as rq
         check = rq.get(
@@ -238,7 +253,7 @@ def save_account(payload: AccountIn):
         )
         if check.status_code != 200:
             raise HTTPException(400, "La cookie no es válida o ha caducado: entra en lobby.ogame.gameforge.com, asegúrate de estar dentro, y cópiala de nuevo")
-    db.save_account(payload.universe, payload.language, payload.username, payload.password, payload.demo, token, game_cookies)
+    db.save_account(payload.universe, payload.language, payload.username, payload.password, payload.demo, token, game_cookies, saved_ua)
     bus.publish("log", level="info", module="web", message="Cuenta guardada")
     return {"ok": True}
 
@@ -256,6 +271,7 @@ def get_account():
         "demo": bool(account["demo"]),
         "session_token": account["session_token"] if "session_token" in keys else "",
         "game_cookies": account["game_cookies"] if "game_cookies" in keys else "",
+        "user_agent": account["user_agent"] if "user_agent" in keys else "",
     }
 
 

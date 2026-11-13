@@ -268,6 +268,7 @@ class BotEngine:
             account["language"],
             account["username"],
             account["password"],
+            user_agent=(account["user_agent"] if "user_agent" in account.keys() and account["user_agent"] else None),
             session_token=(account["session_token"] if "session_token" in account.keys() else None) or None,
             game_cookies=(account["game_cookies"] if "game_cookies" in account.keys() else None) or None,
         )
