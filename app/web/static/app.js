@@ -562,6 +562,18 @@ $("#notify-form").addEventListener("submit", async (ev) => {
   } catch (e) { toast("Error: " + e.message, "error"); }
 });
 
+$("#btn-diagnose").addEventListener("click", async () => {
+  const out = $("#diagnose-out");
+  out.style.display = "block";
+  out.textContent = "⏳ Ejecutando diagnóstico… (tarda unos segundos)";
+  try {
+    const res = await api("/api/diagnose", { method: "POST" });
+    out.textContent = JSON.stringify(res.report, null, 2);
+  } catch (e) {
+    out.textContent = "❌ " + e.message;
+  }
+});
+
 $("#btn-start").addEventListener("click", async () => {
   const msg = $("#start-msg");
   msg.classList.remove("hidden");

@@ -275,6 +275,116 @@ def get_account():
     }
 
 
+@app.post("/api/diagnose")
+def diagnose_login():
+    import requests as rq
+    account = db.get_account()
+    if account is None:
+        raise HTTPException(400, "No hay cuenta guardada")
+    if account["demo"]:
+        raise HTTPException(400, "La cuenta está en modo demo: no hay nada que diagnosticar")
+    ua = (account["user_agent"] if "user_agent" in account.keys() and account["user_agent"] else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+    s = rq.Session()
+    s.headers.update({"User-Agent": ua})
+    report = []
+
+    def step(name, fn):
+        try:
+            report.append({"paso": name, "resultado": fn()})
+        except Exception as exc:
+            report.append({"paso": name, "error": str(exc)[:300]})
+
+    token = ""
+    if "session_token" in account.keys() and account["session_token"]:
+        token = account["session_token"]
+        s.headers["authorization"] = f"Bearer {token}"
+
+    def check_me():
+        r = s.get("https://lobby.ogame.gameforge.com/api/users/me", timeout=20)
+        return {"status": r.status_code, "cuerpo": r.text[:200]}
+
+    step("1. Validar cookie del lobby (GET /api/users/me)", check_me)
+
+    def servers():
+        r = s.get("https://lobby.ogame.gameforge.com/api/servers", timeout=20)
+        data = r.json()
+        match = [x for x in data if str(x.get("name", "")).lower() == account["universe"].lower() and x.get("language") == account["language"]]
+        return {"status": r.status_code, "total": len(data), "coincidencia": match[:1]}
+
+    step("2. Lista de servidores (GET /api/servers)", servers)
+
+    def accounts():
+        r = s.get("https://lobby.ogame.gameforge.com/api/users/me/accounts", timeout=20)
+        return {"status": r.status_code, "cuerpo": r.text[:500]}
+
+    step("3. Cuentas del usuario (GET /api/users/me/accounts)", accounts)
+
+    def login_link():
+        try:
+            accs = s.get("https://lobby.ogame.gameforge.com/api/users/me/accounts", timeout=20).json()
+            if not isinstance(accs, list):
+                return {"nota": f"accounts no es una lista (sesión no válida): {str(accs)[:150]}"}
+            target = None
+            for a in accs:
+                srv = a.get("server", {}) or {}
+                if srv.get("language") == account["language"] and str(srv.get("number", "")) in account["universe"]:
+                    target = a
+            if target is None:
+                for a in accs:
+                    target = a
+                    break
+            if target is None:
+                return {"nota": "no hay ninguna cuenta en la lista"}
+            server_id = target["id"]
+            srv = target.get("server", {}) or {}
+        except Exception as exc:
+            return {"nota": f"no pude obtener accounts: {exc}"}
+        variants = [
+            ("POST json con blackbox", {"json": {"id": server_id, "server": {"language": srv.get("language"), "number": srv.get("number")}, "clickedButton": "account_list", "blackbox": ""}}),
+            ("POST json con X-Requested-With", {"json": {"id": server_id, "server": {"language": srv.get("language"), "number": srv.get("number")}, "clickedButton": "account_list", "blackbox": ""}, "headers": {"X-Requested-With": "XMLHttpRequest"}}),
+            ("GET con query params", {"params": {"id": server_id, "server[language]": srv.get("language"), "server[number]": srv.get("number"), "clickedButton": "account_list"}}),
+        ]
+        out = {"cuenta_usada": {"id": server_id, "server": srv, "blocked": target.get("blocked")}}
+        for name, kwargs in variants:
+            try:
+                if name.startswith("GET"):
+                    r = s.get("https://lobby.ogame.gameforge.com/api/users/me/loginLink", timeout=20, **kwargs)
+                else:
+                    r = s.post("https://lobby.ogame.gameforge.com/api/users/me/loginLink", timeout=20, headers={"Origin": "https://lobby.ogame.gameforge.com", "Referer": "https://lobby.ogame.gameforge.com/", "Accept": "application/json"}, **kwargs)
+                out[name] = {"status": r.status_code, "cuerpo": r.text[:250]}
+            except Exception as exc:
+                out[name] = {"error": str(exc)[:200]}
+        return out
+
+    step("4. Pedir enlace de entrada (loginLink, 3 variantes)", login_link)
+
+    def game_direct():
+        cookies = account["game_cookies"] if "game_cookies" in account.keys() else ""
+        if not cookies:
+            return {"nota": "no hay sesión de juego guardada"}
+        try:
+            servers_data = s.get("https://lobby.ogame.gameforge.com/api/servers", timeout=20).json()
+            number = None
+            for x in servers_data:
+                if str(x.get("name", "")).lower() == account["universe"].lower() and x.get("language") == account["language"]:
+                    number = x["number"]
+                    break
+            if number is None:
+                return {"nota": "universo no encontrado"}
+            r = rq.get(
+                f"https://s{number}-{account['language']}.ogame.gameforge.com/game/index.php?page=ingame",
+                headers={"Cookie": cookies, "User-Agent": ua},
+                timeout=20,
+                allow_redirects=False,
+            )
+            return {"status": r.status_code, "location": r.headers.get("Location", "")[:120], "tiene_meta_jugador": "ogame-player-name" in r.text}
+        except Exception as exc:
+            return {"error": str(exc)[:200]}
+
+    step("5. Sesión de juego directa (si está guardada)", game_direct)
+    return {"report": report}
+
+
 @app.post("/api/bot/start")
 def bot_start():
     try:
