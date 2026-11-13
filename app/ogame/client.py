@@ -97,8 +97,8 @@ class OGameClient:
             self.token = token
             self.session.headers.update({"authorization": f"Bearer {self.token}"})
             check = self.session.get(LOBBY + "/api/users/me", timeout=30, headers={"Referer": LOBBY + "/", "Accept": "application/json"})
-            if check.status_code == 401:
-                raise LoginError("La cookie de sesión ha caducado: entra de nuevo en el lobby y copia una nueva")
+            if check.status_code in (401, 403):
+                raise LoginError("La cookie de sesión ya no es válida (caducó o entraste de nuevo en el lobby y se rotó): copia una nueva y guárdala")
             if check.status_code != 200:
                 raise LoginError(f"La cookie de sesión no es válida ({check.status_code})")
             self._resolve_server()
@@ -226,6 +226,8 @@ class OGameClient:
         except ValueError:
             raise LoginError(f"El lobby respondió {resp.status_code} sin JSON al pedir el enlace de entrada: {resp.text[:200]}")
         if not isinstance(link, dict) or "url" not in link:
+            if resp.status_code in (401, 403) and "not logged in" in str(link):
+                raise LoginError("El lobby dice que la sesión ya no está activa: la cookie se rotó o caducó. Vuelve a copiarla del navegador y guárdala otra vez")
             raise LoginError(f"El lobby rechazó la entrada ({resp.status_code}): {str(link)[:200]}")
         self.index_php = f"https://s{self.server_number}-{self.language}.ogame.gameforge.com/game/index.php?"
         try:
