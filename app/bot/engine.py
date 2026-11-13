@@ -14,6 +14,8 @@ from .modules.fleet import ExpeditionModule, FleetSaveModule, TransportModule
 from .modules.sleep import SleepModule
 from .modules.colonize import ColonizeModule
 from .modules.mapper import GalaxyMapperModule, HuntModule
+from .modules.harvest import HarvestModule
+from .modules.watch import WatchModule
 
 MODULE_CLASSES = [
     FleetSaveModule,
@@ -27,6 +29,8 @@ MODULE_CLASSES = [
     TransportModule,
     GalaxyMapperModule,
     HuntModule,
+    HarvestModule,
+    WatchModule,
 ]
 
 DEFAULT_CONFIG = {
@@ -81,13 +85,6 @@ DEFAULT_CONFIG = {
         "holding_time": 8,
         "cooldown": 900,
     },
-    "transport": {
-        "enabled": False,
-        "interval": 900,
-        "main_id": 0,
-        "threshold": 1000000,
-        "keep": 100000,
-    },
     "colonize": {
         "enabled": False,
         "interval": 900,
@@ -116,6 +113,30 @@ DEFAULT_CONFIG = {
         "enabled": False,
         "interval": 300,
         "rescan_per_run": 5,
+    },
+    "harvest": {
+        "enabled": False,
+        "interval": 900,
+        "origin_id": 0,
+        "recyclers_max": 50,
+        "cooldown": 21600,
+        "max_targets": 3,
+    },
+    "watch": {
+        "enabled": False,
+        "interval": 60,
+        "alert_hunted": True,
+        "hunted_online_minutes": 15,
+        "alert_inactive_recovered": True,
+        "repeat_cooldown": 3600,
+    },
+    "transport": {
+        "enabled": False,
+        "interval": 900,
+        "main_id": 0,
+        "threshold": 1000000,
+        "keep": 100000,
+        "include_moons": True,
     },
 }
 
@@ -169,7 +190,11 @@ class BotEngine:
                 merged[key].update(value)
             else:
                 merged[key] = value
-        self.config = merged
+        if self.config is None:
+            self.config = merged
+        else:
+            self.config.clear()
+            self.config.update(merged)
 
     def save_config(self):
         self.db.set_setting("bot_config", self.config)

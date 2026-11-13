@@ -250,6 +250,12 @@ class Database:
         params.append(limit)
         return self.query(sql, params)
 
+    def debris_positions(self, limit=40):
+        return self.query(
+            "SELECT galaxy, system, position FROM galaxy_map WHERE debris = 1 ORDER BY seen_at DESC LIMIT ?",
+            (limit,),
+        )
+
     def hunted_list(self):
         return [r["player"] for r in self.query("SELECT player FROM hunted ORDER BY player")]
 

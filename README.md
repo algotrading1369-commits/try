@@ -8,7 +8,7 @@ Inspirado en proyectos como [ogame.ninja](https://www.ogame.ninja), [ogame-tbot/
 
 ## Funciones
 
-- **9 módulos autónomos** con planificador, intervalos configurables y jitter aleatorio:
+- **13 módulos autónomos** con planificador, intervalos configurables y jitter aleatorio:
   | Módulo | Función |
   |---|---|
   | Fleet-save | Detecta ataques (event box) y despacha flota + recursos en expedición o reciclaje |
@@ -19,12 +19,14 @@ Inspirado en proyectos como [ogame.ninja](https://www.ogame.ninja), [ogame-tbot/
   | Farmer | Escaneo rotativo de galaxias → espionaje de inactivos → informes → ataques con cargas calculadas |
   | Expediciones | Envío periódico con plantilla de flota y tiempo de retención |
   | Auto-colonización | Modo automático: escanea la galaxia buscando posiciones libres (prefiere las de más campos: 7-9) y coloniza solo mientras tenga naves y huecos de flota; o coordenadas fijas si lo prefieres |
-  | Transportes | Equilibra excedentes de recursos hacia el planeta principal |
+  | Transportes | Equilibra excedentes de recursos hacia el planeta principal, desde planetas y también desde lunas (`include_moons`) |
+  | Recolección | Envía recicladores a los campos de escombros detectados por el mapeo galáctico, con cooldown por coordenadas para no repetir |
+  | Vigilancia | Alertas configurables: presas cazadas que se conectan (por actividad de galaxia) e inactivos que reactivan su cuenta, con anti-repetición |
   | Mapeo galáctico | Escanea el universo en segundo plano (poco a poco, sin saltar el rate-limit) y guarda cada posición: jugador, rank, luna, escombros, inactivo y actividad |
   | Caza | Apunta jugadores por nick y re-escanea sus sistemas periódicamente para registrar cuándo se conectan (actividad de la vista de galaxia) y descubrir sus horarios |
 - **Notificaciones Telegram**: ataques, fleet-save, errores y eventos importantes en tu móvil.
 - **Panel web en tiempo real** (SSE): tarjetas de recursos totales, gráfico de evolución, switches de módulos, alertas, imperio con colas y almacenes, flotas en vuelo, objetivos, escaneo manual de sistemas, configuración editable y registros filtrables.
-- **Modo demo**: universo simulado con 3 planetas, galaxia, espionaje, botín y ataques entrantes.
+- **Modo demo**: universo simulado con 3 planetas + 1 luna, galaxia, espionaje, botín, escombros recolectables y ataques entrantes.
 - **Login real** vía lobby de Gameforge (token Bearer, relogin automático, throttling aleatorio).
 - **Protección por contraseña** del panel (variable `WEB_PASSWORD`).
 - **Persistencia SQLite**: cuenta, configuración, logs, objetivos, historial de recursos y estadísticas.

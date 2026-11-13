@@ -1,7 +1,7 @@
 import random
 import time
 
-from ..base import Module, planets_only, total_ships
+from ..base import Module, total_ships
 from ...ogame import constants as c
 
 
@@ -126,14 +126,19 @@ class TransportModule(Module):
         main_id = int(cfg.get("main_id", 0))
         threshold = int(cfg.get("threshold", 1_000_000))
         keep = int(cfg.get("keep", 100_000))
-        planets = planets_only(self.ctx)
+        include_moons = bool(cfg.get("include_moons", True))
+        empire = self.ctx.client.empire()
+        planets = [p for p in empire if p["type"] == "planet"]
         if not planets:
             return "sin planetas"
         if not main_id:
             main_id = planets[0]["id"]
+        origins = list(planets)
+        if include_moons:
+            origins += [p for p in empire if p["type"] == "moon"]
         slots = self.ctx.client.fleet_slots()
         moved = []
-        for planet in planets:
+        for planet in origins:
             if planet["id"] == main_id:
                 continue
             if slots["fleet"]["used"] >= slots["fleet"]["total"]:

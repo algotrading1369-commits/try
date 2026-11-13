@@ -6,10 +6,11 @@ from . import constants as c
 
 
 class MockFleet:
-    def __init__(self, fleet_id, mission, origin, destination, ships, arrival, return_flight=False):
+    def __init__(self, fleet_id, mission, origin, destination, ships, arrival, return_flight=False, origin_id=None):
         self.id = fleet_id
         self.mission = mission
         self.origin = origin
+        self.origin_id = origin_id
         self.destination = destination
         self.ship_store = dict(ships)
         self.arrival = arrival
@@ -37,6 +38,12 @@ class MockClient:
                 "name": "Colonia Prime",
                 "coords": [4, 21, 6],
                 "type": "planet",
+            },
+            {
+                "id": 33616099,
+                "name": "Luna Prime",
+                "coords": [4, 21, 6],
+                "type": "moon",
             },
             {
                 "id": 33616122,
@@ -82,15 +89,25 @@ class MockClient:
             }
             for planet in self.planets
         }
+        self.res_store[33616099] = {
+            "metal": 1_800_000,
+            "crystal": 900_000,
+            "deuterium": 300_000,
+            "darkmatter": 5_000,
+            "energy": 0,
+            "storage": [3_000_000, 3_000_000, 2_000_000],
+        }
         self.ship_store = {
-            self.planets[0]["id"]: {202: 120, 203: 60, 204: 800, 206: 90, 207: 40, 208: 1, 210: 200, 209: 20},
-            self.planets[1]["id"]: {202: 70, 204: 300, 210: 90, 206: 25},
-            self.planets[2]["id"]: {202: 40, 204: 150, 210: 60},
+            33616111: {202: 120, 203: 60, 204: 800, 206: 90, 207: 40, 208: 1, 210: 200, 209: 20},
+            33616099: {202: 80, 203: 30, 209: 10, 210: 40},
+            33616122: {202: 70, 204: 300, 210: 90, 206: 25},
+            33616133: {202: 40, 204: 150, 210: 60},
         }
         self.defense_store = {
             planet["id"]: {401: 200, 402: 100, 403: 30, 404: 10, 407: 1}
             for planet in self.planets
         }
+        self.defense_store[33616099] = {}
         self.queues = {planet["id"]: [] for planet in self.planets}
         self.research_queue = []
         self.fleet_list = []
@@ -277,9 +294,17 @@ class MockClient:
                             res["metal"] += fleet.cargo.get("metal", 0)
                             res["crystal"] += fleet.cargo.get("crystal", 0)
                             res["deuterium"] += fleet.cargo.get("deuterium", 0)
+                        fleet.cargo = {}
                     fleet.return_flight = True
                     fleet.arrival = now + random.randint(60, 180)
                 elif fleet.return_flight and fleet.arrival <= now:
+                    origin_res = self.res_store.get(fleet.origin_id)
+                    if origin_res is not None and fleet.cargo:
+                        for key in ("metal", "crystal", "deuterium"):
+                            origin_res[key] += fleet.cargo.get(key, 0)
+                    ships_back = self.ship_store.setdefault(fleet.origin_id, {})
+                    for sid, amount in fleet.ship_store.items():
+                        ships_back[sid] = ships_back.get(sid, 0) + amount
                     self.fleet_list.remove(fleet)
             return [
                 {
@@ -361,6 +386,7 @@ class MockClient:
                 list(destination[:3]),
                 ships,
                 self._now() + duration,
+                origin_id=origin_id,
             )
             fleet.cargo = {"metal": resources[0], "crystal": resources[1], "deuterium": resources[2]}
             self._fleet_seq += 1
@@ -371,6 +397,12 @@ class MockClient:
                     "deuterium": self._rnd.randint(0, 60_000),
                 }
                 fleet.cargo = loot
+            if mission == c.MISSION_RECYCLE:
+                fleet.cargo = {
+                    "metal": self._rnd.randint(50_000, 900_000),
+                    "crystal": self._rnd.randint(20_000, 400_000),
+                    "deuterium": self._rnd.randint(0, 50_000),
+                }
             self.fleet_list.append(fleet)
             return {"success": True, "fleetId": fleet.id, "arrival": int(fleet.arrival)}
 
